@@ -342,10 +342,12 @@ writeln('');
 $guessGitHubVendorInfo = guessGitHubVendorInfo($authorName, $authorUsername);
 
 $vendorName = ask('Vendor name', $guessGitHubVendorInfo[0]);
+writeln(dim('  The slug used in composer.json, e.g. "spatie" in spatie/laravel-ray.'));
 $vendorUsername = ask('Vendor username', $guessGitHubVendorInfo[1] ?? slugify($vendorName));
 $vendorSlug = slugify($vendorUsername);
 
 $vendorNamespace = str_replace('-', '', ucwords($vendorName));
+writeln(dim('  The PHP namespace prefix for your package, e.g. Spatie\\LaravelRay.'));
 $vendorNamespace = ask('Vendor namespace', $vendorNamespace);
 
 writeln('');
@@ -369,10 +371,15 @@ writeln(bold('  Tooling'));
 writeln(dim('  Choose which dev tools to include. You can always add these later.'));
 writeln('');
 
+writeln(dim('  Static analysis to catch bugs before they reach production.'));
 $usePhpStan = confirm('Enable PhpStan?', true);
+writeln(dim('  Automatic code formatting following Laravel conventions.'));
 $useLaravelPint = confirm('Enable Laravel Pint?', true);
+writeln(dim('  Automated dependency update PRs via GitHub.'));
 $useDependabot = confirm('Enable Dependabot?', true);
+writeln(dim('  Debug your package with the Ray desktop app.'));
 $useLaravelRay = confirm('Use Ray for debugging?', true);
+writeln(dim('  Automatically updates CHANGELOG.md when a new release is tagged.'));
 $useUpdateChangelogWorkflow = confirm('Use automatic changelog updater workflow?', true);
 
 writeln('');
