@@ -403,12 +403,16 @@ writeln('');
 
 writeln(dim('  Static analysis to catch bugs before they reach production.'));
 $usePhpStan = confirm('Enable PhpStan?', true);
+writeln('');
 writeln(dim('  Automatic code formatting following Laravel conventions.'));
 $useLaravelPint = confirm('Enable Laravel Pint?', true);
+writeln('');
 writeln(dim('  Automated dependency update PRs via GitHub.'));
 $useDependabot = confirm('Enable Dependabot?', true);
+writeln('');
 writeln(dim('  Debug your package with the Ray desktop app.'));
 $useLaravelRay = confirm('Use Ray for debugging?', true);
+writeln('');
 writeln(dim('  Automatically updates CHANGELOG.md when a new release is tagged.'));
 $useUpdateChangelogWorkflow = confirm('Use automatic changelog updater workflow?', true);
 
