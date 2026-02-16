@@ -372,10 +372,11 @@ writeln('');
 $guessGitHubVendorInfo = guessGitHubVendorInfo($authorName, $authorUsername);
 
 $vendorName = ask('Vendor name', $guessGitHubVendorInfo[0]);
+writeln('');
 writeln(dim('  The slug used in composer.json, e.g. "spatie" in spatie/laravel-ray.'));
 $vendorUsername = ask('Vendor username', $guessGitHubVendorInfo[1] ?? slugify($vendorName));
 $vendorSlug = slugify($vendorUsername);
-
+writeln('');
 $vendorNamespace = str_replace('-', '', ucwords($vendorName));
 writeln(dim('  The PHP namespace prefix for your package, e.g. Spatie\\LaravelRay.'));
 $vendorNamespace = ask('Vendor namespace', $vendorNamespace);
