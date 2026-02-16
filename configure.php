@@ -60,7 +60,7 @@ function ask(string $question, string $default = ''): string
         $prompt .= ' '.dim("({$default})");
     }
 
-    $answer = readline($prompt.': ');
+    $answer = readline('  '.$prompt.': ');
 
     if (! $answer) {
         return $default;
