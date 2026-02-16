@@ -418,23 +418,22 @@ writeln(dim('  Automatically updates CHANGELOG.md when a new release is tagged.'
 $useUpdateChangelogWorkflow = confirm('Use automatic changelog updater workflow?', true);
 
 writeln('');
-writeln('------');
-writeln("Author     : {$authorName} ({$authorUsername}, {$authorEmail})");
-writeln("Vendor     : {$vendorName} ({$vendorSlug})");
-writeln("Package    : {$packageSlug} <{$description}>");
-writeln("Namespace  : {$vendorNamespace}\\{$className}");
-writeln("Class name : {$className}");
-writeln('---');
-writeln('Packages & Utilities');
-writeln('Use Laravel/Pint     : '.($useLaravelPint ? 'yes' : 'no'));
-writeln('Use Larastan/PhpStan : '.($usePhpStan ? 'yes' : 'no'));
-writeln('Use Dependabot       : '.($useDependabot ? 'yes' : 'no'));
-writeln('Use Ray App          : '.($useLaravelRay ? 'yes' : 'no'));
-writeln('Use Auto-Changelog   : '.($useUpdateChangelogWorkflow ? 'yes' : 'no'));
-writeln('------');
-
+writeln(bold('  Summary'));
 writeln('');
-writeln('This script will replace the above values in all relevant files in the project directory.');
+writeln("  Author      {$authorName} ({$authorUsername}, {$authorEmail})");
+writeln("  Vendor      {$vendorName} ({$vendorSlug})");
+writeln("  Package     {$packageSlug}");
+writeln("  Description {$description}");
+writeln("  Namespace   {$vendorNamespace}\\{$className}");
+writeln("  Class       {$className}");
+writeln('');
+writeln('  Tooling');
+writeln('  PhpStan          '.($usePhpStan ? green('yes') : dim('no')));
+writeln('  Laravel Pint     '.($useLaravelPint ? green('yes') : dim('no')));
+writeln('  Dependabot       '.($useDependabot ? green('yes') : dim('no')));
+writeln('  Ray              '.($useLaravelRay ? green('yes') : dim('no')));
+writeln('  Auto-Changelog   '.($useUpdateChangelogWorkflow ? green('yes') : dim('no')));
+writeln('');
 
 if (! confirm('Modify files?', true)) {
     exit(1);
