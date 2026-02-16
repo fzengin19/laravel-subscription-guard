@@ -319,8 +319,38 @@ function guessGitHubVendorInfo($authorName, $username): array
 }
 
 writeln('');
-writeln(bold('  Laravel Package Skeleton'));
-writeln(dim('  Configure your new package'));
+
+$logoLines = [
+    '  ███████ ██████   █████  ████████ ████ ████████',
+    '  ██      ██   ██ ██   ██    ██     ██  ██',
+    '  ███████ ██████  ███████    ██     ██  ██████',
+    '       ██ ██      ██   ██    ██     ██  ██',
+    '  ███████ ██      ██   ██    ██    ████ ████████',
+];
+
+$gradientColors = [
+    '38;2;100;200;225',
+    '38;2;62;170;200',
+    '38;2;35;140;175',
+    '38;2;25;117;147',
+    '38;2;15;90;115',
+];
+
+foreach ($logoLines as $i => $line) {
+    writeln(supportsAnsi() ? "\033[{$gradientColors[$i]}m{$line}\033[0m" : $line);
+}
+
+writeln('');
+
+if (supportsAnsi()) {
+    writeln("  \033[48;2;25;117;147m\033[97m ✦ Laravel Package Skeleton :: spatie.be ✦ \033[0m");
+} else {
+    writeln('  ✦ Laravel Package Skeleton :: spatie.be ✦');
+}
+
+writeln('');
+writeln('  Thanks for using the Spatie Laravel package skeleton!');
+writeln('  Let\'s get your new package configured.');
 writeln('');
 
 writeln(bold('  Author'));
@@ -491,6 +521,10 @@ writeln('');
 writeln(green(bold('  Done! Your package is ready.')));
 writeln('');
 
-confirm('Execute `composer install` and run tests?') && run('composer install && composer test');
+confirm('Execute `composer install` and run tests?', true) && run('composer install && composer test');
 
 confirm('Let this script delete itself?', true) && unlink(__FILE__);
+
+writeln('');
+writeln('  Happy building! If you need help, check out https://laravelpackage.training');
+writeln('');
