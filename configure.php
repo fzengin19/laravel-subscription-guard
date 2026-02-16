@@ -521,14 +521,12 @@ if (! empty($removeDeps) || ! empty($removeScripts)) {
     writeln(green('  ✓ Cleaned up composer.json'));
 }
 
-writeln('');
-writeln(green(bold('  Done! Your package is ready.')));
-writeln('');
-
 confirm('Execute `composer install` and run tests?', true) && run('composer install && composer test');
 
+writeln('');
 confirm('Let this script delete itself?', true) && unlink(__FILE__);
 
 writeln('');
-writeln('  Happy building! If you need help, check out https://laravelpackage.training');
+writeln(green(bold('  ✨ You\'re all set! Happy building!')));
+writeln(dim('  Need help creating a package? Check out https://laravelpackage.training'));
 writeln('');
