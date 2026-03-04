@@ -1,0 +1,68 @@
+<?php
+
+declare(strict_types=1);
+
+namespace SubscriptionGuard\LaravelSubscriptionGuard\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Database\Eloquent\SoftDeletes;
+
+class Subscription extends Model
+{
+    use SoftDeletes;
+
+    protected $guarded = [];
+
+    protected function casts(): array
+    {
+        return [
+            'metadata' => 'array',
+            'trial_ends_at' => 'datetime',
+            'next_billing_date' => 'datetime',
+            'current_period_start' => 'datetime',
+            'current_period_end' => 'datetime',
+            'grace_ends_at' => 'datetime',
+            'resumes_at' => 'datetime',
+            'cancels_at' => 'datetime',
+            'cancelled_at' => 'datetime',
+        ];
+    }
+
+    public function subscribable(): MorphTo
+    {
+        return $this->morphTo();
+    }
+
+    public function plan(): BelongsTo
+    {
+        return $this->belongsTo(Plan::class);
+    }
+
+    public function license(): BelongsTo
+    {
+        return $this->belongsTo(License::class);
+    }
+
+    public function items(): HasMany
+    {
+        return $this->hasMany(SubscriptionItem::class);
+    }
+
+    public function transactions(): HasMany
+    {
+        return $this->hasMany(Transaction::class);
+    }
+
+    public function scheduledPlanChanges(): HasMany
+    {
+        return $this->hasMany(ScheduledPlanChange::class);
+    }
+
+    public function scheduledChange(): BelongsTo
+    {
+        return $this->belongsTo(ScheduledPlanChange::class, 'scheduled_change_id');
+    }
+}

@@ -1,18 +1,30 @@
 <?php
 
+declare(strict_types=1);
+
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Commands;
 
 use Illuminate\Console\Command;
 
 class LaravelSubscriptionGuardCommand extends Command
 {
-    public $signature = 'laravel-subscription-guard';
+    protected $signature = 'subguard:install';
 
-    public $description = 'My command';
+    protected $description = 'Install and verify Laravel Subscription Guard core setup';
 
     public function handle(): int
     {
-        $this->comment('All done');
+        $webhookPrefix = (string) config('subscription-guard.webhooks.prefix', 'subguard/webhooks');
+
+        $this->info('Laravel Subscription Guard core setup ready.');
+        $this->line('');
+        $this->line('Next steps:');
+        $this->line(' - php artisan vendor:publish --tag="laravel-subscription-guard-config"');
+        $this->line(' - php artisan migrate');
+        $this->line(' - Configure providers in config/subscription-guard.php');
+        $this->line(' - Register scheduler commands in app Console Kernel');
+        $this->line('');
+        $this->line('Webhook endpoint prefix: /'.trim($webhookPrefix, '/'));
 
         return self::SUCCESS;
     }

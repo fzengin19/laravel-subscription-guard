@@ -2,7 +2,7 @@
 
 > **Versiyon**: 2.2 (Yol Haritası)
 > **Tarih**: 2026-03-03
-> **Durum**: Draft
+> **Durum**: Execution in Progress (Faz 1 tamamlandı)
 
 ---
 
@@ -419,6 +419,11 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 ---
 
 ## Değişiklik Günlüğü
+
+### v2.3 (2026-03-04)
+- Faz 1 (Core Infrastructure) tamamlandı ve phase-1 work-results/risk-notes güncellendi
+- Migration şeması create-table odaklı hale getirildi, expansion migration kaldırıldı
+- Queue-first billing orchestration komut/job temeli Faz 1 kapsamına göre tamamlandı
 
 ### v2.0 (2026-03-03)
 - **YENİ YAPI**: Master plan sadece yol haritası olarak yeniden yazıldı
