@@ -34,14 +34,13 @@
     },
     "autoload": {
         "psr-4": {
-            "SubGuard\\LaravelSubGuard\\": "src/",
-            "SubGuard\\LaravelSubGuard\\Database\\Factories\\": "database/factories/"
+            "SubscriptionGuard\\LaravelSubscriptionGuard\\": "src/",
+            "SubscriptionGuard\\LaravelSubscriptionGuard\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "SubGuard\\LaravelSubGuard\\Tests\\": "tests/",
-            "Workbench\\App\\": "workbench/app/"
+            "SubscriptionGuard\\LaravelSubscriptionGuard\\Tests\\": "tests/"
         }
     },
     "scripts": {
@@ -62,10 +61,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "SubGuard\\LaravelSubGuard\\LaravelSubGuardServiceProvider"
+                "SubscriptionGuard\\LaravelSubscriptionGuard\\LaravelSubscriptionGuardServiceProvider"
             ],
             "aliases": {
-                "LaravelSubGuard": "SubGuard\\LaravelSubGuard\\Facades\\LaravelSubGuard"
+                "LaravelSubscriptionGuard": "SubscriptionGuard\\LaravelSubscriptionGuard\\Facades\\LaravelSubscriptionGuard"
             }
         }
     },
