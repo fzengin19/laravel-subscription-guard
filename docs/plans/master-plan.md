@@ -1,6 +1,6 @@
 # Laravel Subscription Guard - Master Plan
 
-> **Versiyon**: 2.0 (Yol Haritası)
+> **Versiyon**: 2.2 (Yol Haritası)
 > **Tarih**: 2026-03-03
 > **Durum**: Draft
 
@@ -20,6 +20,7 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 3. **Genişletilebilirlik**: Custom provider desteği (ara yüz tabanlı)
 4. **Kolay Entegrasyon**: Minimum konfigürasyonla çalışabilir
 5. **Production-Ready**: Güvenli, test edilmiş, dokümantasyonlu
+6. **Execution-Ready**: Faz 1 başlangıcında ilk commit hedefi net (migrations + interfaces)
 
 ### Kalite Hedefleri
 - %90+ test coverage
@@ -38,6 +39,38 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 | **Contract-Based Design** | Interface'ler ile tanımlama, implementasyon değiştirilebilir |
 | **Event-Driven Architecture** | Ödeme, lisans, abonelik olayları için event'ler |
 | **Configuration Over Convention** | Davranış config ile özelleştirilir |
+
+---
+
+## Pre-Implementation Architecture Gates
+
+Faz 1 kodlamasına başlamadan önce aşağıdaki kapılar **zorunlu** olarak netleşmiş olmalıdır:
+
+| Gate | Durum | Owner Faz | Bloklayıcı |
+|------|-------|-----------|------------|
+| Service/Provider sorumluluk sınırı | Tanımlı | Faz 1-2-3 | Evet |
+| Billable + BillingProfile veri modeli | Tanımlı | Faz 1 | Evet |
+| Webhook route + CSRF politikası | Tanımlı | Faz 1 | Evet |
+| sync-plans eşleşme/CRUD stratejisi | Tanımlı | Faz 2 | Evet |
+| Renewal/dunning locking ve idempotency | Tanımlı | Faz 1-3 | Evet |
+| License key format + revocation distribution | Tanımlı | Faz 4 | Evet |
+| Command scope (`subguard:install` dahil) | Tanımlı | Faz 1-5 | Evet |
+| Logging kanal stratejisi | Tanımlı | Faz 1 | Evet |
+| Timezone/billing anchor politikası | Tanımlı | Faz 4-5 | Evet |
+| Coupon/discount implementation ownership | Tanımlı | Faz 5 | Evet |
+| Faz 0 bootstrap (Testbench + Pest + CI iskeleti) | Tanımlı | Faz 1 başlangıcı | Evet |
+
+---
+
+## Faz 0 Bootstrap (Zorunlu Ön Koşul)
+
+Faz 1 kodlamasına geçmeden önce aşağıdaki teknik temel kurulur:
+
+- Orchestra Testbench kurulumu
+- Pest test altyapısı kurulumu
+- GitHub Actions matrix iskeleti (PHP 8.4, Laravel 11/12)
+
+Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ---
 
@@ -92,7 +125,7 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 - Dunning retry iş akışı (2/5/7 gün)
 - Webhook/notification handling
 - Refund API
-- Marketplace/split payment (opsiyonel)
+- Marketplace/split payment (v1 dışı, v1.1 backlog)
 
 **Çıktılar**:
 - PaytrProvider sınıfı
@@ -106,7 +139,7 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 **Detaylı Plan**: `phase-4-licensing-system/plan.md`
 
 **Kapsam**:
-- License key generation (Ed25519/RSA-2048)
+- License key generation (Ed25519)
 - License validation (online/offline)
 - Feature gating sistemi
 - License activation/deactivation
@@ -126,8 +159,8 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 **Detaylı Plan**: `phase-5-integration-testing/plan.md`
 
 **Kapsam**:
-- Frontend components (opsiyonel)
-- Billing portal (opsiyonel)
+- Frontend components (v1 dışı, v1.1 backlog)
+- Billing portal (v1 dışı, v1.1 backlog)
 - Webhook simulation command
 - End-to-end tests
 - Performance tests
@@ -135,7 +168,7 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 - Dokümantasyon
 
 **Çıktılar**:
-- Blade/Livewire components
+- Frontend portalın v1 dışı olduğu dokümante edildi
 - Webhook simulation command
 - Integration tests
 - Dokümantasyon (TR/EN)
@@ -149,11 +182,14 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 |-------|----------|
 | `plans` | Plan tanımları (fiyat, özellikler, limits) |
 | `licenses` | Lisans kayıtları (key, status, features, limits) |
+| `license_activations` | Domain/cihaz aktivasyon geçmişi |
 | `license_usages` | Lisans kullanım logları |
 | `subscriptions` | Abonelik kayıtları (status, billing cycle) |
 | `subscription_items` | Çoklu plan desteği (multi-plan) |
 | `transactions` | Ödeme işlemleri (amount, tax, status) |
+| `invoices` | Faturalama domain kayıtları |
 | `payment_methods` | Kayıtlı kartlar (tokens, masked info) |
+| `billing_profiles` | Billable profil/fatura bilgileri |
 | `webhook_calls` | Webhook logları (idempotency için) |
 | `coupons` | Kupon tanımları |
 | `discounts` | Uygulanan indirimler |
@@ -247,17 +283,32 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 - **Sorun**: `past_due` kullanıcı kart güncellediğinde dunning penceresini beklemek gelir kaybı yaratır
 - **Çözüm**: `PaymentMethodUpdated` sonrası `retryPastDuePayments()` ile anında tahsilat denemesi
 
+### 21. sync-plans CRUD Matrisi
+- **Sorun**: Plan eşleştirme stratejisi belirsiz kalırsa duplicate/bozuk mapping oluşur
+- **Çözüm**: Faz 2'de create/update/deactivate/relink davranışı net matrix ile tanımlanır
+
+### 22. License Key Format Tutarlılığı
+- **Sorun**: Ed25519 tam imza ile kısa/truncated key karışırsa güvenlik zafiyeti doğar
+- **Çözüm**: Signed payload format + ayrı display key/checksum yaklaşımı kullanılır
+
+### 23. Revocation Distribution Mekanizması
+- **Sorun**: Offline lisanslarda iptal bilgisinin dağıtımı belirsiz kalabilir
+- **Çözüm**: Delta sync + sequence numarası + heartbeat ile revocation list dağıtımı
+
+### 24. Renewal Locking ve Single-Writer
+- **Sorun**: Scheduler paralelliğinde çift tahsilat riski
+- **Çözüm**: `withoutOverlapping` + distributed lock + row lock + idempotent mutasyon
+
 ---
 
 ## Kullanıcı Deneyimi (DX)
 
-### Frontend Components (Opsiyonel)
+### Frontend Components (v1 Dışı)
 - Pricing Table component
 - Checkout form
 - Billing Portal (Faturalarım, Aboneliklerim, Kartlarım)
 
 ### Developer Tools
-- `subguard:install-portal` command
 - `subguard:simulate-webhook` command
 - Local testing utilities
 
@@ -267,7 +318,7 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 
 | Alan | Gereksinim |
 |------|------------|
-| **License Crypto** | Ed25519 veya RSA-2048 (PKV kullanma!) |
+| **License Crypto** | Ed25519 (v1 zorunlu, PKV kullanma) |
 | **Webhook Signature** | HMAC-SHA256 verification |
 | **Card Tokens** | Veritabanında şifreli saklama |
 | **Soft Deletes** | Tüm finansal tablolarda zorunlu |
@@ -283,6 +334,12 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 | **Integration Tests** | Provider başına tüm akışlar |
 | **Feature Tests** | End-to-end senaryolar |
 | **Webhook Tests** | Simulate command ile local test |
+
+### Compatibility CI Gates
+- PHP 8.4 zorunlu
+- Laravel 11/12 test matrisi
+- `iyzico/iyzipay-php` smoke compatibility testleri
+- PayTR HTTP client akış testleri (guzzle)
 
 ---
 
@@ -313,7 +370,7 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 | `config/` | Paket konfigürasyonları |
 | `database/migrations/` | Migration dosyaları |
 | `tests/` | Unit/Integration/Feature testleri |
-| `resources/views/` | Opsiyonel portal ve bileşen görünümleri |
+| `resources/views/` | v1 kapsam dışı (portal v1.1 backlog) |
 
 ---
 
@@ -322,9 +379,31 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 | Paket | Versiyon | Amaç |
 |-------|----------|------|
 | `iyzico/iyzipay-php` | ^2.x | iyzico SDK |
+| `guzzlehttp/guzzle` | ^7.x | PayTR ve genel HTTP istemci |
+| `spatie/laravel-pdf` | ^2.x | Invoice PDF üretimi (v1 zorunlu) |
 | `ext-sodium` | * | Ed25519 crypto |
 | `laravel/framework` | ^11.0|^12.0 | Laravel |
 | `spatie/laravel-package-tools` | ^1.0 | Package skeleton |
+
+### Development Bağımlılıkları
+
+| Paket | Versiyon | Amaç |
+|-------|----------|------|
+| `orchestra/testbench` | ^9.x | Package test harness |
+| `pestphp/pest` | ^2.x | Test runner |
+
+### Kesin Entegrasyon Kararları
+
+| Konu | Karar |
+|------|-------|
+| `spatie/laravel-data` | v1 DIŞI (manuel typed DTO zorunlu) |
+| `spatie/laravel-pdf` | v1 İÇİ (zorunlu) |
+| `spatie/laravel-activitylog` | v1 DIŞI (Laravel native audit logging kullanılacak) |
+| `spatie/laravel-webhook-client` | v1 DIŞI (`webhook_calls` + custom idempotency kullanılacak) |
+| `laravel/horizon` | v1 DIŞI (queue mimarisi var, Horizon dependency yok) |
+| `spatie/laravel-multitenancy` | v1 DIŞI (v2 backlog) |
+| Frontend portal bileşenleri | v1 DIŞI (v1.1 backlog) |
+| Marketplace/split payment | v1 DIŞI (v1.1 backlog) |
 
 ---
 
@@ -345,8 +424,20 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 - **YENİ YAPI**: Master plan sadece yol haritası olarak yeniden yazıldı
 - Kodlar kaldırıldı, her faz için ayrı detaylı plan dosyaları oluşturulacak
 - Plans klasör yapısı: her faz için plan.md, work-results.md, risk-notes.md
-- 20 kritik gerçek ve çözümler eklendi
+- 24 kritik gerçek ve çözümler eklendi
 - Seat-based billing, metered billing, multi-currency eklendi
+
+### v2.1 (2026-03-04)
+- Queue-first billing orchestration netleştirildi (scheduler -> queued jobs)
+- Notification stratejisi (mail/database zorunlu, SMS v1 dışı) planlandı
+- Invoice PDF + e-Fatura hook sınırları netleştirildi
+- DTO katmanı için manuel typed DTO zorunluluğu netleştirildi
+- Rate limiting + audit baseline güçlendirildi
+
+### v2.2 (2026-03-04)
+- Tüm belirsiz ifadeler kesin kapsam kararına çevrildi
+- v1 içi/v1 dışı karar matrisi eklendi
+- Faz kapsamları marketplace ve frontend portal için netleştirildi
 
 ### v1.2 (2026-03-03)
 - Kritik gerçeklik güncellemesi (feedback sonrası)

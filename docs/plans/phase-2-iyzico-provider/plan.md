@@ -135,6 +135,11 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
 - checkoutFormContent (form için)
 - providerResponse
 
+### DTO Uygulama Stratejisi
+- v1'de manuel typed DTO zorunludur
+- `spatie/laravel-data` v1 kapsam dışıdır
+- DTO validation ingress boundary'de yapılır (request/webhook parse)
+
 ---
 
 ## IyzicoProvider Sınıfı
@@ -168,11 +173,25 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
 - Eşleşmeyen planlarda subscription create bloke edilir
 - Senkronizasyon raporunda: eşleşen / eksik / çakışan referanslar listelenir
 
+### sync-plans Eşleşme Stratejisi
+- Canonical match key: `plans.slug`
+- Mapping alanları: `plans.iyzico_product_reference`, `plans.iyzico_pricing_plan_reference`
+- Mapping state: linked / conflict / missing_remote / missing_local
+
+### sync-plans CRUD Davranış Matrisi
+- Local yeni plan + remote yok -> remote create + local reference update
+- Local güncel plan + remote var -> remote update (fiyat/periyot uyum kontrolü)
+- Local pasif plan + remote aktif -> remote deactivate veya local blokaj notu
+- Remote'da local karşılığı olmayan plan -> orphan raporu (auto-delete yok)
+- Reference çakışması -> manuel müdahale gerektiren conflict raporu
+
 ### User → iyzico Buyer
 - User.id → Buyer.id
 - User.email → Buyer.email
 - User.name → Buyer.name + surname
 - User.tax_id → Buyer.identityNumber
+- Buyer mapping kaynağı `Billable/BillingProfile` sözleşmesidir
+- Billable entity User, Team veya Organization olabilir (polymorphic)
 
 ---
 
@@ -199,6 +218,13 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
   - Faz 2 çıkış kriterlerinden biridir
 - `subguard:reconcile-iyzico-subscriptions`
   - Webhook kaçırma durumunda remote/local abonelik durumlarını uzlaştırır
+  - Frekans: saat başı lightweight kontrol + her gün 02:00 tam uzlaştırma
+  - Tutarsızlıkta: önce rapor, ardından güvenli state düzeltmesi (idempotent update)
+
+### Callback URL Yönetimi
+- 3DS/CheckoutForm callback URL'leri paket route helper ile üretilir
+- Varsayılan callback prefix config'ten gelir (`webhooks.prefix`)
+- Callback URL override v1'de desteklenir: `providers.iyzico.callback_url` zorunlu format doğrulamasıyla uygulanır
 
 ---
 
@@ -225,6 +251,9 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
 - [ ] Card storage çalışıyor
 - [ ] Webhook handling çalışıyor
 - [ ] Idempotency çalışıyor
+- [ ] `subguard:sync-plans` create/update/conflict senaryoları doğrulanıyor
+- [ ] `subguard:reconcile-iyzico-subscriptions` tutarsız state'i düzeltiyor
+- [ ] Callback URL üretimi auto-route ve custom-route modlarında doğru çalışıyor
 
 ---
 

@@ -19,6 +19,8 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 3. Interface/contract tanımlarını oluştur
 4. Service provider kayıtlarını yap
 5. Configuration dosyasını oluştur
+6. Execution kickoff için ilk implementation commit temelini hazırla (migrations + interfaces)
+7. Faz 0 bootstrap tamamla (Orchestra Testbench + Pest + CI iskeleti)
 
 ---
 
@@ -29,12 +31,19 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 - Özellikler (features JSON)
 - Limitler (limits JSON)
 - Billing period (monthly, yearly)
+- Provider mapping alanları (iyzico_product_reference, iyzico_pricing_plan_reference)
 
 ### licenses Tablosu
 - Lisans kayıtları (key, status, expires_at)
 - Plan ilişkisi
 - Feature ve limit overrides
-- Activation tracking
+- max_activations, current_activations
+- domain binding politikası için alanlar (veya ayrı activation tablosu)
+
+### license_activations Tablosu
+- License activation geçmişi
+- domain, ip, activated_at, deactivated_at
+- Cihaz/domain bazlı lifecycle takibi
 
 ### subscriptions Tablosu
 - Abonelik kayıtları
@@ -61,6 +70,13 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 - Provider response
 - Soft deletes
 
+### invoices Tablosu
+- Faturalama kayıtları (transaction'dan bağımsız domain obje)
+- invoice_number, issue_date, due_date, status
+- subtotal, tax_amount, total_amount, currency
+- transaction_id, subscribable polymorphic ilişki
+- E-Fatura event tetikleme için referans alanlar
+
 ### payment_methods Tablosu
 - Kayıtlı kartlar
 - Card tokens (provider_card_token, provider_customer_token)
@@ -71,6 +87,14 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 - Webhook logları
 - Idempotency için event_id
 - Payload ve headers
+- State machine: pending -> processing -> processed/failed/ignored
+- processed_at, error_message
+
+### billing_profiles Tablosu
+- Billable entity için fatura bilgileri
+- billable_type, billable_id (polymorphic)
+- company_name, tax_office, tax_id, billing_address
+- city, country, zip, phone
 
 ### coupons Tablosu
 - Kupon tanımları
@@ -80,6 +104,9 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 ### discounts Tablosu
 - Uygulanan indirimler
 - Polymorphic relation
+- `duration`: once | forever | repeating
+- `duration_in_months`: repeating için zorunlu
+- `applied_cycles`: renewal sırasında düşüm takibi
 
 ### scheduled_plan_changes Tablosu
 - Plan değişiklik planlaması
@@ -105,6 +132,9 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 | Discount | morphTo(discountable) |
 | ScheduledPlanChange | belongsTo(Subscription) |
 | LicenseUsage | belongsTo(License) |
+| Invoice | belongsTo(Transaction), morphTo(subscribable) |
+| BillingProfile | morphTo(billable) |
+| LicenseActivation | belongsTo(License) |
 
 ---
 
@@ -141,9 +171,25 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 - resume(subscriptionId): bool
 - upgrade(subscriptionId, newPlanId, mode): bool
 - downgrade(subscriptionId, newPlanId): bool
+- applyDiscount(subscriptionId, couponOrDiscountCode): DiscountResult
 - processRenewals(date): int
 - processDunning(date): int
+- processScheduledPlanChanges(date): int
 - retryPastDuePayments(subscribableId): int
+
+### BillingProfileInterface
+- getBillingProfile(): BillingProfileData
+- hasBillingProfile(): bool
+
+### Billable Trait / Concern
+- Kullanıcı veya Team/Organization modeline eklenebilir
+- `morphOne(BillingProfile::class, 'billable')`
+- iyzico Buyer mapping için canonical veri kaynağı
+
+### BillingProfile Senkronizasyon Kuralı
+- Billable owner (`name`, `email`) alanları değiştiğinde BillingProfile snapshot alanları senkron güncellenir
+- Senkronizasyon lifecycle: owner `saved` eventi sonrası `SyncBillingProfileJob`
+- Buyer payload üretimi sırasında owner + profile merge edilerek stale veri riski engellenir
 
 **Upgrade mode sözleşmesi**:
 - `mode = now` -> anlık plan geçişi denemesi
@@ -162,6 +208,42 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 
 ---
 
+## Sorumluluk Sınırı (Service vs Provider)
+
+### SubscriptionService (Orchestrator)
+- Domain akışını yönetir: plan seçimi, local state, event dispatch
+- Provider seçimini `PaymentManager` üzerinden yapar
+- Redirect/hosted akışlarda response envelope üretir
+
+### PaymentProvider (Gateway Adapter)
+- Gateway spesifik API çağrılarını yapar
+- İmza doğrulama ve provider response parse eder
+- `createSubscription`/`upgradeSubscription` gateway kapasitesine göre davranır
+
+### Akış Matrisi
+- Direct charge: Service -> Provider pay -> sync response -> local transaction
+- 3DS/Hosted: Service -> Provider init -> redirect/token response -> callback/webhook finalize
+- Provider-managed recurring (iyzico): local renewal charge yok, webhook state sync var
+- Self-managed recurring (PayTR): scheduler ile `chargeRecurring` çağrısı var
+
+---
+
+## Faz 0 Bootstrap (Zorunlu)
+
+### Amaç
+- Kodlamaya başlamadan test/harness altyapısını kurmak
+
+### Yapılacaklar
+- `orchestra/testbench` kur
+- `pestphp/pest` kur ve baseline test çalıştır
+- CI workflow iskeleti oluştur (PHP 8.4, Laravel 11/12 matrix)
+
+### Çıkış Kriteri
+- Testbench ile package boot test'i geçer
+- `composer test` minimum smoke testi geçer
+
+---
+
 ## Configuration
 
 ### subscription-guard.php
@@ -172,11 +254,20 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 - Webhook settings
 - Feature gates
 
+### Logging Config
+- `logging.channels.subguard_payments`
+- `logging.channels.subguard_webhooks`
+- `logging.channels.subguard_licenses`
+
 ### Provider Billing Strategy Config
 - `providers.iyzico.manages_own_billing = true`
 - `providers.paytr.manages_own_billing = false`
 - `billing.renewal_command = subguard:process-renewals`
 - `billing.dunning_command = subguard:process-dunning`
+- `queue.connection = database|redis`
+- `queue.queue = subguard-billing`
+- `queue.webhooks_queue = subguard-webhooks`
+- `queue.notifications_queue = subguard-notifications`
 
 ---
 
@@ -185,15 +276,26 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 ### Komutlar
 - `subguard:process-renewals`
   - `next_billing_date <= bugün` ve `managesOwnBilling=false` abonelikleri işler
-  - Başarılı tahsilatta `next_billing_date` bir sonraki döneme kayar
+  - Ağır tahsilat işi doğrudan komutta yapılmaz, queue job dispatch edilir
 - `subguard:process-dunning`
   - `next_retry_at <= bugün` başarısız tahsilatları tekrar dener
   - Retry policy: 2 / 5 / 7 gün
+  - Her retry denemesi queued job olarak çalışır
+- `subguard:suspend-overdue`
+  - grace süresi dolmuş abonelikleri suspend eder
+  - lisans statüsünü subscription statüsü ile senkronlar
+- `subguard:process-plan-changes`
+  - `scheduled_plan_changes` kaydını dönem sonunda uygular
+  - upgrade/downgrade state geçişini tek noktadan yönetir
 
 ### Domain Kuralları
 - Provider-managed provider'lar (iyzico) renewal job kapsamı dışındadır
 - Self-managed provider'lar (PayTR) renewal job kapsamına alınır
 - `paused` durumundaki abonelikler renewal sürecinden geçmez
+- Renewal job ve plan-change job aynı subscription için eşzamanlı mutasyon yapmaz
+- Dunning retry ve suspend-overdue komutlarının sorumlulukları ayrıdır
+- Banka taksiti (tek çekim) ile manuel taksit (çoklu çekim) ayrı akıştır
+- Tek çekim yıllık planlarda `next_billing_date` plan periyoduna göre +1 yıl set edilir
 
 ### Trial Kuralı (Self-Managed Provider)
 - Trial başlatılırken kart saklama yapılır, düzenli tahsilat yapılmaz
@@ -207,10 +309,79 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
   - `idempotency_key` unique
 - Webhook handler duplicate işlem tespitinde state değiştirmeden 200 döner
 
+### Job-Level Concurrency Koruması
+- Scheduler komutları `withoutOverlapping()` ile çalışır
+- Subscription bazlı distributed lock (`cache()->lock`) kullanılır
+- Charge ve state update DB transaction + `SELECT ... FOR UPDATE` altında yürür
+
+---
+
+## Queue & Job Orchestration
+
+### Job Türleri
+- `ProcessRenewalCandidateJob`
+- `PaymentChargeJob`
+- `ProcessDunningRetryJob`
+- `FinalizeWebhookEventJob`
+- `DispatchBillingNotificationsJob`
+
+### Prensipler
+- Scheduler sadece adayları seçer, finansal mutasyonu queue job yapar
+- Her job idempotent key ile çalışır
+- Job retry/backoff politikası açıkça tanımlanır
+- `afterCommit` kuralı: notification/event dispatch işlemleri commit sonrası tetiklenir
+
+### Horizon Politikası
+- Horizon v1 kapsam dışıdır (package dependency değil)
+- Queue gözlemleme Laravel queue worker metrikleri ile yürütülür
+
 ### Single-Writer Webhook Prensibi
 - Webhook endpoint'in tek görevi: signature doğrulama + kuyruğa alma + hızlı 200 dönüş
 - Finansal state değişimi sadece tek işleyici akışında yapılır (queue worker / payment processor)
 - Hem senkron job hem webhook aynı işlem id'sinde aynı mutasyon akışına yönlenir
+
+---
+
+## Webhook Route Kaydı Stratejisi
+
+### Paket Tarafı Route Registration
+- Paket, webhook endpointlerini otomatik kaydeder (prefix config ile)
+- Örnek prefix: `/subguard/webhooks/{provider}`
+- Varsayılan middleware: `api` (CSRF dışı)
+
+### CSRF Politikası
+- Webhook route'ları `web` middleware altında çalıştırılmaz
+- v1'de webhook route modu sabittir: `api` middleware + CSRF hariç
+
+### Override Seçeneği
+- v1'de manuel route override desteklenmez
+- Paket auto-route kaydı ile tek route sözleşmesi kullanır
+
+---
+
+## Exception Hiyerarşisi
+
+- SubGuardException (base)
+- ProviderException
+- PaymentFailedException
+- InsufficientFundsException
+- WebhookSignatureException
+- LicenseException
+- LicenseRevokedException
+- UnsupportedProviderOperationException
+
+---
+
+## Rate Limiting & Audit Baseline
+
+### Rate Limiting
+- License validation endpoint'leri rate-limit edilir
+- Varsayılan: `throttle:license-validation` (configurable)
+
+### Audit Logging
+- Finansal state değişimleri için immutable audit trail tutulur
+- Laravel native logging varsayılan
+- `spatie/laravel-activitylog` v1 kapsam dışıdır
 
 ---
 
@@ -219,19 +390,31 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 ### LaravelSubscriptionGuardServiceProvider
 - Config publish
 - Migrations publish
-- Views publish (opsiyonel)
+- Views publish (v1 kapsam dışı)
 - Singleton bindings (PaymentManager, LicenseManager)
 - Interface bindings
+- Package route registration (webhook + callback)
+- Install komutu kaydı (`subguard:install`)
+
+---
+
+## Multi-Tenant Hazırlığı
+
+- `subscribable` ve `billable` polymorphic ilişkiler Team/Organization için hazır tutulur
+- Team/Organization modeli v1 kapsam dışıdır; şema v2 geçişine hazır bırakılır
 
 ---
 
 ## Çıktılar
 
 - [ ] Migration dosyaları (11 tablo)
-- [ ] Model sınıfları (11 model)
-- [ ] Interface dosyaları (4 interface)
+- [ ] Model sınıfları (Invoice, BillingProfile, LicenseActivation dahil)
+- [ ] Interface dosyaları (BillingProfileInterface dahil)
 - [ ] Config dosyası
 - [ ] Service provider
+- [ ] Webhook route registration ve CSRF stratejisi
+- [ ] Exception hiyerarşisi
+- [ ] İlk implementation commit: migrations + interfaces
 
 ---
 
