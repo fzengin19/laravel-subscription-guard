@@ -8,23 +8,24 @@
 
 ## Özet
 
-Frontend components, webhook simulation, end-to-end tests, performance tests, security audit, dokümantasyon.
+Webhook simulation, end-to-end tests, performance tests, security audit, notifications, invoice PDF/e-Fatura hook, dokümantasyon.
 
 ---
 
 ## Hedefler
 
-1. Frontend components (opsiyonel)
-2. Billing portal (opsiyonel)
+1. Frontend components (v1 kapsam dışı)
+2. Frontend portal kararı netleştirme (v1 kapsam dışı)
 3. Webhook simulation command
 4. End-to-end tests
 5. Performance tests
 6. Security audit
 7. Dokümantasyon
+8. Coupon/discount akışlarının fonksiyonel olarak tamamlanması
 
 ---
 
-## Frontend Components (Opsiyonel)
+## Frontend Components (v1 Kapsam Dışı)
 
 ### Blade Components
 - Pricing Table
@@ -41,10 +42,16 @@ Frontend components, webhook simulation, end-to-end tests, performance tests, se
 - Subscription Manager
 - Invoice Downloader
 
-### Install Command
-```bash
-php artisan subguard:install-portal
-```
+### V1 Kararı
+- `subguard:install-portal` komutu v1'de uygulanmayacaktır
+- Frontend portal v1.1 backlog olarak kalacaktır
+
+### subguard:install Kapsamı
+- Config publish
+- Migration publish
+- Route registration doğrulama
+- Webhook URL ve callback URL çıktısı
+- Queue/scheduler zorunlu kurulum çıktısının gösterimi
 
 ### Publishable Views
 - resources/views/components/
@@ -133,6 +140,7 @@ php artisan subguard:simulate-webhook paytr subscription.cancelled
 - [ ] `PaymentMethodUpdated` sonrası `past_due` abonelikte anında recovery denemesi
 - [ ] Duplicate webhook'ta no-op + 200 OK davranışı
 - [ ] Retryable/non-retryable hata sınıflandırmasına göre doğru dunning akışı
+- [ ] Billing timezone anchor (UTC + billing_timezone) sınır testi
 
 #### License Flow
 - [ ] License generation
@@ -172,6 +180,12 @@ php artisan subguard:simulate-webhook paytr subscription.cancelled
 - Caching strategy
 - Queue processing
 
+### Compatibility Gates
+- Composer constraint: `php: ^8.4`
+- CI matrix: Laravel 11/12 + PHP 8.4
+- `iyzico/iyzipay-php` uyumluluk smoke testleri zorunlu
+- PayTR HTTP akışları için client bağımlılığı doğrulaması (guzzle)
+
 ---
 
 ## Security Audit
@@ -185,6 +199,7 @@ php artisan subguard:simulate-webhook paytr subscription.cancelled
 - [ ] Rate limiting
 - [ ] Input validation
 - [ ] Output escaping
+- [ ] Soft-deleted payment method/subscription ile yeniden işlem engeli
 
 ### Vulnerability Scan
 - composer audit
@@ -203,12 +218,37 @@ php artisan subguard:simulate-webhook paytr subscription.cancelled
 ### Exchange Rate Handling
 - transactions.exchange_rate field
 - transactions.provider_currency field
-- Daily exchange rate update (optional job)
+- Daily exchange rate update job (zorunlu)
 
 ### Currency Conversion
 - Plan currency → Provider currency
 - Display currency → Charge currency
 - Invoice currency → Settlement currency
+
+### Reconciliation Notu
+- `exchange_rate` ve `provider_currency` finansal mutabakat raporlarında zorunlu gösterilir
+
+---
+
+## Notifications & Messaging
+
+### Zorunlu Kanallar (v1)
+- Mail
+- Database
+
+### v1 Dışı Kanallar
+- SMS/WhatsApp v1 kapsam dışıdır
+
+### Event -> Notification Haritası
+- `PaymentFailed` -> FailedPaymentNotification
+- `SubscriptionCancelled` -> SubscriptionCancelledNotification
+- `LicenseRevoked` -> LicenseRevokedNotification
+- `InvoicePaid` -> InvoicePaidNotification
+
+### Uygulama Kuralları
+- Notification sınıfları `ShouldQueue` kullanır
+- Dispatch işlemleri `afterCommit` ile tetiklenir
+- Kanal bazlı queue ayrımı (`subguard-notifications`) desteklenir
 
 ---
 
@@ -243,16 +283,28 @@ class SendEfaturaOnPayment
 - Uyumsoft integration
 - Custom integration guide
 
+### PDF Generation Boundary
+- Core paket v1'de PDF üretimini içerir
+- `spatie/laravel-pdf` v1 zorunlu bağımlılıktır
+- PDF üretimi invoice domain kaydından türetilir
+
 ---
 
 ## Developer Experience (DX)
 
 ### Artisan Commands
 - subguard:install
-- subguard:install-portal
 - subguard:simulate-webhook
 - subguard:generate-license
 - subguard:check-license
+
+### Install Komut Ayrımı
+- `subguard:install`: backend/core kurulum (config, migration, routes, scheduler hints)
+- `subguard:install-portal`: v1 kapsam dışı
+
+### Queue/Worker Notu
+- Billing ve notification akışları queue-first çalıştırılır
+- Horizon v1 kapsam dışıdır
 
 ### Helper Functions
 - subscription() → Current subscription
@@ -304,6 +356,7 @@ class SendEfaturaOnPayment
 - Seat-based billing
 - Metered billing
 - Custom events
+- Notifications
 
 ### API.md
 - Public API reference
@@ -318,37 +371,72 @@ class SendEfaturaOnPayment
 
 ---
 
+## CI/CD Matrix
+
+- PHP: 8.4
+- Laravel: 11.x, 12.x
+- Test: Pest (unit + integration + feature)
+- Workflow: GitHub Actions matrix strategy
+
+---
+
 ## Taksitli İşlem ve Abonelik
 
 ### Problem
 - iyzico/PayTR recurring API genellikle tek çekim
-- Yıllık plan + 12 taksit = Wleyş ödeme API
+- Yıllık plan + 12 taksit = standart ödeme API akışı
+
+### Kritik Ayrım
+- **Bank installment (tek çekim)**: Provider tek tahsilat yapar, banka kart sahibine taksit yansıtır
+- **Manual installment (çoklu çekim)**: Sistem periyodik olarak birden fazla charge üretir
+- Bu iki model aynı akışta karıştırılmaz
 
 ### Solution
 **Option 1**: Standart ödeme + manuel recurring
 - CheckoutForm ile 12 taksit
 - Saklı kart token'ı
 - Cron ile aylık çekim
+- İlk başarılı ödeme callback'i sonrası subscription kaydı oluşturulur
+- Her periyot charge sonucu transaction + invoice kaydı açılır
+- `next_billing_date` her aylık çekim sonrası +1 ay ilerler
 
 **Option 2**: Abonelik API (tek çekim)
 - Yıllık plan = tek çekim
 - Taksit yok
+- Subscription period başlangıcı ilk tahsilat timestamp'inden alınır
+- `next_billing_date` plan periyoduna göre +1 yıl set edilir
+
+### Bank Installment Kuralı
+- Yıllık plan bankada taksitlendirilse bile sistemde tahsilat **tek çekim** kabul edilir
+- Bu durumda `next_billing_date = +1 yıl` olur
+- `next_billing_date` banka taksit sayısına göre bölünmez
 
 ### Recommendation
 - Yıllık planlar: Tek çekim (abonelik API)
 - Taksitli: Aylık plan + manuel recurring
+- Native recurring + taksit kombinasyonu desteklenmiyorsa dokümantasyonda açıkça "unsupported" belirtilir
+
+---
+
+## Coupon & Discount Ownership
+
+- Faz 1: sadece şema (coupons, discounts)
+- Faz 5: kupon doğrulama, uygulama, transaction/invoice yansıtma, testler
+- Kapsam dışı bırakılmayacak; orphan tablo bırakılmaz
+- Renewal indirimi için süre modeli zorunlu: `once | forever | repeating`
+- `repeating` modelinde `duration_in_months` ve `applied_cycles` takip edilir
 
 ---
 
 ## Çıktılar
 
-- [ ] Blade components (opsiyonel)
-- [ ] Livewire components (opsiyonel)
-- [ ] Billing portal (opsiyonel)
+- [ ] Frontend portalın v1 dışı olduğu dokümante edildi
 - [ ] Webhook simulation command
 - [ ] End-to-end tests
 - [ ] Performance tests
 - [ ] Security audit report
+- [ ] Notification sınıfları ve listener haritası
+- [ ] Invoice PDF üretim akışı
 - [ ] Dokümantasyon (TR/EN)
 - [ ] README.md
 - [ ] CHANGELOG.md
@@ -369,7 +457,7 @@ class SendEfaturaOnPayment
 
 | Risk | Etki | Öneri |
 |------|------|-------|
-| Frontend component complexity | Orta | Opsiyonel yap, minimal başla |
+| Frontend component complexity | Düşük | v1 kapsam dışı tut |
 | Multi-currency accuracy | Yüksek | Daily rate update |
 | Taksitli abonelik karışıklığı | Orta | Dokümantasyonda netleştir |
 

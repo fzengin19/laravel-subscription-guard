@@ -14,7 +14,7 @@ Lisans key generation, validation, feature gating, subscription bridge, grace pe
 
 ## Hedefler
 
-1. License key generation (Ed25519/RSA-2048)
+1. License key generation (Ed25519)
 2. License validation (online/offline)
 3. Feature gating sistemi
 4. License activation/deactivation
@@ -26,15 +26,14 @@ Lisans key generation, validation, feature gating, subscription bridge, grace pe
 ## Lisans Key Generation
 
 ### Crypto Algoritmaları
-- **Ed25519** (Önerilen): Hızlı, kısa key'ler
-- **RSA-2048**: Daha yaygın destek
+- **Ed25519**: v1 için zorunlu algoritma
+- **RSA-2048**: v1 kapsam dışı (v1.1 backlog)
 
 ### Key Format
-```
-{PREFIX}-{UUID_V4}-{SIGNATURE}
-
-Örnek: SG-550e8400-e29b-41d4-a716-446655440000-A1B2C3D4
-```
+- Canonical format: `SG.{BASE64URL_PAYLOAD}.{BASE64URL_SIGNATURE}`
+- Payload imzalanır; signature kısaltılmaz/truncate edilmez
+- İnsan dostu kısa anahtar gerekiyorsa ayrı `display_key` + checksum kullanılır
+- Validation her zaman tam signature üzerinden yapılır
 
 ### PKV Uyarısı
 - Partial Key Verification (PKV) kullanma!
@@ -69,6 +68,7 @@ Lisans key generation, validation, feature gating, subscription bridge, grace pe
 - Embedded expiration (JWT-style)
 - Weekly heartbeat requirement
 - Revocation check (cached blacklist)
+- Delta revocation sync desteği
 
 ### Validation Flow
 1. License key parse
@@ -93,6 +93,11 @@ Lisans key generation, validation, feature gating, subscription bridge, grace pe
 - UsageGate: usage('api_calls') → 850/1000
 - ScheduleGate: availableUntil('beta') → timestamp
 
+### ScheduleGate Kullanım Senaryosu
+- Beta/erken erişim özelliğini belirli tarihe kadar açık tutma
+- Kampanya bazlı geçici feature açma/kapama
+- Trial uzatma gibi zaman bağlı yetki kuralları
+
 ### Middleware
 - LicenseFeatureMiddleware: feature check
 - LicenseLimitMiddleware: limit check
@@ -109,7 +114,7 @@ Lisans key generation, validation, feature gating, subscription bridge, grace pe
 ### Activation Process
 1. License key input
 2. Validation (online)
-3. Domain/IP binding (optional)
+3. Domain binding (v1 zorunlu)
 4. Activation count check
 5. Database record
 6. Event fire
@@ -124,6 +129,11 @@ Lisans key generation, validation, feature gating, subscription bridge, grace pe
 - license.max_activations field
 - license.current_activations counter
 - Lockout after max attempts
+
+### Activation Storage
+- `license_activations` tablosu canonical source'tur
+- Alanlar: domain, ip, activated_at, deactivated_at, metadata
+- current_activations sayacı bu tablodan türetilen değerle tutarlı kalır
 
 ---
 
@@ -217,6 +227,10 @@ Fazlar arasında alan adı alias'ı üretilmez; tek isimlendirme korunur.
   - `retry_count=0`, `next_retry_at=null`
 - Başarısızsa normal dunning takvimi devam eder
 
+### Komut Sorumluluk Ayrımı
+- `subguard:process-dunning`: retry planlama ve deneme akışı
+- `subguard:suspend-overdue`: grace süresi dolan abonelikleri suspend etme
+
 ---
 
 ## Offline Validation & Revocation
@@ -229,6 +243,13 @@ Fazlar arasında alan adı alias'ı üretilmez; tek isimlendirme korunur.
 2. Weekly heartbeat requirement
 3. Cached revocation list
 4. Grace period for missed heartbeats
+
+### Revocation List Distribution
+- Endpoint: versioned revocation feed (sequence numarası ile)
+- Full sync + delta sync desteklenir
+- İstemci son sequence'i saklar; sadece farkı çeker
+- Heartbeat başarısızsa grace policy uygulanır, grace sonunda lisans invalid olur
+- v1 formatı sabittir: hash-set + delta feed (Bloom filter v1 kapsam dışı)
 
 ### Flow
 ```
@@ -259,6 +280,11 @@ Software Start → Check local cache
 - subguard:process-metered-billing
 - Runs daily at 00:00
 - Process all period-ending subscriptions
+
+### Timezone Politikası
+- Billing anchor UTC olarak saklanır
+- `billing_timezone` alanı v1'de zorunludur (default: UTC)
+- DST kaynaklı kaymaları önlemek için period sonu epoch tabanlı hesaplanır
 
 ---
 
@@ -309,6 +335,37 @@ Software Start → Check local cache
 | LicenseFeatureChecked | Feature check yapıldı |
 | LicenseLimitExceeded | Limit aşıldı |
 
+### Event Overhead Kontrolü
+- `LicenseFeatureChecked` eventi v1'de kapalıdır
+- v1'de config ile açma desteği yoktur (v1.1 backlog)
+
+---
+
+## Endpoint Protection & Audit
+
+### Rate Limiting
+- License validation endpointleri için `throttle:license-validation`
+- Default policy configurable olmalı (IP + key tabanlı)
+
+### Audit Logging
+- License generate/activate/revoke/suspend aksiyonları audit trail'e yazılır
+- Varsayılan Laravel logging
+- `spatie/laravel-activitylog` v1 kapsam dışıdır
+
+### Data Redaction
+- Loglarda PII ve tam lisans imzası maskelenir
+- Correlation ID ile payment/license akışları bağlanır
+
+---
+
+## Operasyonel Komutlar
+
+- `subguard:generate-license` -> manuel lisans üretim aracı
+- `subguard:check-license` -> lisans doğrulama/diagnostic aracı
+- `subguard:process-dunning` -> retryable ödemelerde recovery denemeleri
+- `subguard:suspend-overdue` -> grace süresi aşan abonelikleri suspend etme
+- `subguard:process-metered-billing` -> dönem sonu kullanım bazlı tahsilat
+
 ---
 
 ## Çıktılar
@@ -332,7 +389,6 @@ Software Start → Check local cache
 ## Test Kriterleri
 
 - [ ] License generation çalışıyor (Ed25519)
-- [ ] License generation çalışıyor (RSA-2048)
 - [ ] Online validation çalışıyor
 - [ ] Offline validation çalışıyor
 - [ ] Feature gating çalışıyor

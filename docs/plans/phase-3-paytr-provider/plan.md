@@ -19,7 +19,7 @@ PayTR iFrame + CAPI entegrasyonu: ilk kart kaydı kullanıcı etkileşimli, recu
 3. Self-managed recurring billing engine entegrasyonu
 4. Webhook/notification handling
 5. Refund API
-6. Marketplace/split payment (opsiyonel)
+6. Marketplace/split payment (v1 kapsam dışı, v1.1 backlog)
 
 ---
 
@@ -167,6 +167,7 @@ hash = base64_encode(
 - managesOwnBilling(): false
 - pay(): iFrame token generation
 - createSubscription(): Card storage + recurring
+- upgradeSubscription(): mode=now ise lokal proration+charge, mode=next_period ise schedule
 - chargeRecurring(): CAPI Non3D tahsilat
 - refund(): Refund API
 - validateWebhook(): Hash check
@@ -181,6 +182,8 @@ hash = base64_encode(
 - `subscriptions.next_billing_date <= bugün` kayıtlarını alır
 - Kayıtlı kart token'ı (utoken/ctoken) ile CAPI tahsilatı dener
 - Başarılı tahsilatta `next_billing_date` bir sonraki döneme alınır
+- İşlem `cache()->lock` + transaction + row lock ile korunur
+- Ağır tahsilat işlemi queued `PaymentChargeJob` üzerinden yürütülür
 
 ### Trial Akışı (PayTR Self-Managed)
 - Trial'lı abonelik başlatılırken amaç tahsilat değil kart doğrulama/saklamadır
@@ -191,8 +194,9 @@ hash = base64_encode(
 
 ### Dunning Akışı
 - `retry_count`, `next_retry_at`, `last_retry_at` alanları üzerinden yönetilir
-- Önerilen retry pencereleri: 2, 5, 7 gün
+- Retry pencereleri: 2, 5, 7 gün
 - `try_again=false` dönen hatalarda retry durdurulur ve kullanıcı kart güncellemeye yönlendirilir
+- Retry denemeleri queue üzerinde izole job'larda yürütülür
 
 ### Kart Güncelleme Sonrası Anında Kurtarma
 - Kullanıcı kart güncellediğinde `PaymentMethodUpdated` olayı fırlatılır
@@ -204,6 +208,12 @@ hash = base64_encode(
 - Provider tarafında native plan-switch API varsayılmaz
 - Plan değişimi lokal domain işlemidir (`scheduled_plan_changes`)
 - Yeni fiyat bir sonraki `next_billing_date` tahsilatında uygulanır
+
+### scheduled_plan_changes İşleyicisi
+- `subguard:process-plan-changes` komutu tarafından işlenir
+- `scheduled_at <= now()` kayıtları lock ile alınır
+- Uygulama sonrası status: pending -> completed (veya failed)
+- Renewal job ile aynı aboneliğe çakışmamak için subscription bazlı lock kullanılır
 
 ### Anında Upgrade (mode=now) - Self-Managed Kural
 - Sadece `managesOwnBilling=false` provider'larda lokal proration uygulanır
@@ -218,10 +228,14 @@ hash = base64_encode(
 - Fark tutar > 0 ise `chargeRecurring()` ile anında çekim denenir
 - Çekim başarılıysa `plan_id` hemen güncellenir
 - Çekim başarısızsa plan değişikliği iptal edilir, mevcut plan korunur
-- Retryable hata durumunda opsiyonel fallback:
-  - `pending_plan_id` veya `scheduled_plan_changes` kaydı ile dönem sonuna erteleme
+- Retryable hata durumunda fallback zorunludur:
+  - `scheduled_plan_changes` kaydı ile dönem sonuna erteleme
   - kullanıcıya başarısızlık + tekrar deneme bildirimi
 - Her durumda tek finansal kayıt kuralı korunur (idempotent transaction)
+
+### Interface Uyum Notu
+- `upgradeSubscription()` metodu PayTR'da unsupported değildir; lokal domain akışını yönetir
+- Gateway-native upgrade beklenmez, fakat interface sözleşmesi korunur
 
 ---
 
@@ -240,6 +254,11 @@ hash = base64_encode(
 - iframeToken
 - iframeUrl
 - providerResponse
+
+### DTO Uygulama Stratejisi
+- Varsayılan: manuel typed DTO'lar (v1)
+- `spatie/laravel-data` v1 kapsam dışıdır
+- DTO sözleşmesi manuel typed sınıflarla sabitlenir
 
 ---
 
