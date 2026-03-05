@@ -14,6 +14,7 @@ use Illuminate\Support\Facades\DB;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
 final class ProcessRenewalCandidateJob implements ShouldQueue
 {
@@ -27,7 +28,7 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
         $this->onQueue((string) config('subscription-guard.queue.queue', 'subguard-main'));
     }
 
-    public function handle(PaymentManager $paymentManager): void
+    public function handle(PaymentManager $paymentManager, SubscriptionService $subscriptionService): void
     {
         $lock = cache()->lock('subguard:renewal:'.$this->subscriptionId, 30);
 
@@ -36,7 +37,7 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
         }
 
         try {
-            DB::transaction(function () use ($paymentManager): void {
+            DB::transaction(function () use ($paymentManager, $subscriptionService): void {
                 $subscription = Subscription::query()
                     ->withTrashed()
                     ->lockForUpdate()
@@ -93,6 +94,8 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
                 $taxRate = (float) $subscription->getAttribute('tax_rate');
                 $currency = (string) $subscription->getAttribute('currency');
 
+                $resolvedDiscount = $subscriptionService->resolveRenewalDiscount($subscription, $amount);
+
                 $transaction = Transaction::query()->firstOrCreate(
                     ['idempotency_key' => $idempotencyKey],
                     [
@@ -103,7 +106,10 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
                         'provider' => $provider,
                         'type' => 'renewal',
                         'status' => 'pending',
-                        'amount' => $amount,
+                        'amount' => $resolvedDiscount['amount'],
+                        'discount_amount' => $resolvedDiscount['discount_amount'],
+                        'coupon_id' => $resolvedDiscount['coupon_id'],
+                        'discount_id' => $resolvedDiscount['discount_id'],
                         'tax_amount' => $taxAmount,
                         'tax_rate' => $taxRate,
                         'currency' => $currency,
@@ -112,6 +118,10 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
 
                 if (! $transaction->wasRecentlyCreated) {
                     return;
+                }
+
+                if (is_numeric($resolvedDiscount['discount_id'])) {
+                    $subscriptionService->markDiscountApplied((int) $resolvedDiscount['discount_id']);
                 }
 
                 PaymentChargeJob::dispatch((int) $transaction->getKey())

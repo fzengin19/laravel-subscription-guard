@@ -321,7 +321,10 @@ it('marks pending renewal transactions as failed when subscription is soft delet
 
     $subscription->delete();
 
-    (new ProcessRenewalCandidateJob($subscription->getKey()))->handle(app(PaymentManager::class));
+    (new ProcessRenewalCandidateJob($subscription->getKey()))->handle(
+        app(PaymentManager::class),
+        app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class)
+    );
 
     expect((string) $transaction->fresh()?->getAttribute('status'))->toBe('failed');
     expect((string) $transaction->fresh()?->getAttribute('failure_reason'))->toBe('Subscription is deleted; renewal skipped.');
