@@ -1,8 +1,8 @@
 # Laravel Subscription Guard - Master Plan
 
-> **Versiyon**: 3.0 (Yol Haritası)
+> **Versiyon**: 3.1 (Yol Haritası)
 > **Tarih**: 2026-03-03
-> **Durum**: Execution in Progress (Faz 1-5 tamamlandı, Faz 6 planlandı)
+> **Durum**: Execution in Progress (Faz 1-6 tamamlandı, Faz 7 planlandı)
 
 ---
 
@@ -228,7 +228,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 6: Security Hardening & Debug Reliability (3 Hafta)
 **Detaylı Plan**: `phase-6-security-hardening/plan.md`
-**Durum**: Planlama (2026-03-05)
+**Durum**: Tamamlandı (2026-03-05)
 
 **Kapsam**:
 - License limit middleware TOCTOU risk kapanışı
@@ -241,6 +241,23 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 - Faz 6 güvenlik hardening plan dokümanı
 - Faz 6 work-results ve risk-notes şablonları
 - Güncellenmiş güvenlik kapanış kabul kriterleri
+
+---
+
+### Faz 7: Code Simplification & Readability Hardening (3 Hafta)
+**Detaylı Plan**: `phase-7-code-simplification/plan.md`
+**Durum**: Planlama (2026-03-05)
+
+**Kapsam**:
+- Davranış değiştirmeden kod sadeleştirme ve okunabilirlik iyileştirmesi
+- Redundant query, branch duplication ve boilerplate status transition bloklarının azaltılması
+- Lock/transaction/idempotency ve guard kuralları korunarak refactor uygulanması
+- Signature ve webhook akışlarında yüksek dikkatli readability refactor'ları
+
+**Çıktılar**:
+- Faz 7 planı
+- Faz 7 work-results ve risk-notes şablonları
+- Readability odaklı kabul kriterleri ve rollout sırası
 
 ---
 
@@ -487,6 +504,12 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 ---
 
 ## Değişiklik Günlüğü
+
+### v3.1 (2026-03-05)
+- Faz 6 durumu master plan üzerinde tamamlandı olarak güncellendi
+- Faz 7 (Code Simplification & Readability Hardening) roadmap'e eklendi
+- `phase-7-code-simplification/plan.md` oluşturuldu
+- Faz 7 için zorunlu doküman seti (`work-results.md`, `risk-notes.md`) eklendi
 
 ### v3.0 (2026-03-05)
 - Faz 6 (Security Hardening & Debug Reliability) roadmap'e eklendi
