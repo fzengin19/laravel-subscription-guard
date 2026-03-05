@@ -46,9 +46,12 @@ return [
         'renewal_command' => 'subguard:process-renewals',
         'dunning_command' => 'subguard:process-dunning',
         'suspend_command' => 'subguard:suspend-overdue',
+        'metered_command' => 'subguard:process-metered-billing',
         'plan_changes_command' => 'subguard:process-plan-changes',
         'sync_plans_command' => 'subguard:sync-plans',
         'reconcile_iyzico_command' => 'subguard:reconcile-iyzico-subscriptions',
+        'generate_license_command' => 'subguard:generate-license',
+        'check_license_command' => 'subguard:check-license',
     ],
 
     'logging' => [
@@ -59,6 +62,25 @@ return [
 
     'license' => [
         'algorithm' => 'ed25519',
+        'key_id' => env('SUBGUARD_LICENSE_KEY_ID', 'v1'),
+        'default_ttl_seconds' => (int) env('SUBGUARD_LICENSE_TTL_SECONDS', 2_592_000),
+        'validation_path' => env('SUBGUARD_LICENSE_VALIDATION_PATH', 'subguard/licenses/validate'),
+        'auto_register_validation_route' => (bool) env('SUBGUARD_LICENSE_AUTO_REGISTER_VALIDATION_ROUTE', true),
+        'keys' => [
+            'public' => env('SUBGUARD_LICENSE_PUBLIC_KEY', ''),
+            'private' => env('SUBGUARD_LICENSE_PRIVATE_KEY', ''),
+        ],
+        'offline' => [
+            'max_stale_seconds' => (int) env('SUBGUARD_LICENSE_HEARTBEAT_MAX_STALE_SECONDS', 604800),
+            'heartbeat_ttl_seconds' => (int) env('SUBGUARD_LICENSE_HEARTBEAT_TTL_SECONDS', 1209600),
+            'heartbeat_cache_prefix' => env('SUBGUARD_LICENSE_HEARTBEAT_CACHE_PREFIX', 'subguard:license:heartbeat:'),
+            'clock_skew_seconds' => (int) env('SUBGUARD_LICENSE_HEARTBEAT_CLOCK_SKEW_SECONDS', 60),
+        ],
+        'revocation' => [
+            'cache_key' => env('SUBGUARD_LICENSE_REVOCATION_CACHE_KEY', 'subguard:license:revocation'),
+            'snapshot_ttl_seconds' => (int) env('SUBGUARD_LICENSE_REVOCATION_SNAPSHOT_TTL_SECONDS', 604800),
+            'fail_open_on_expired' => (bool) env('SUBGUARD_LICENSE_REVOCATION_FAIL_OPEN_ON_EXPIRED', true),
+        ],
         'events' => [
             'emit_feature_checked' => false,
         ],
