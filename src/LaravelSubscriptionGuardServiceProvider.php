@@ -18,6 +18,11 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\SubscriptionServiceInte
 use SubscriptionGuard\LaravelSubscriptionGuard\Features\FeatureGate;
 use SubscriptionGuard\LaravelSubscriptionGuard\Licensing\LicenseManager;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\ProviderEvents\ProviderEventDispatcherResolver;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\Commands\ReconcileIyzicoSubscriptionsCommand;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\Commands\SyncPlansCommand;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProviderEventDispatcher;
 use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
 class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
@@ -33,6 +38,8 @@ class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
                 ProcessDunningCommand::class,
                 SuspendOverdueCommand::class,
                 ProcessPlanChangesCommand::class,
+                SyncPlansCommand::class,
+                ReconcileIyzicoSubscriptionsCommand::class,
             ]);
     }
 
@@ -41,8 +48,14 @@ class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
         $this->loadMigrationsFrom(__DIR__.'/../database/migrations');
 
         $this->app->singleton(PaymentManager::class, static fn (): PaymentManager => new PaymentManager);
+        $this->app->singleton(IyzicoProvider::class, static fn (): IyzicoProvider => new IyzicoProvider);
+        $this->app->singleton(IyzicoProviderEventDispatcher::class, static fn (): IyzicoProviderEventDispatcher => new IyzicoProviderEventDispatcher);
+        $this->app->singleton(ProviderEventDispatcherResolver::class, fn (): ProviderEventDispatcherResolver => new ProviderEventDispatcherResolver($this->app));
         $this->app->singleton(LicenseManager::class, static fn (): LicenseManager => new LicenseManager);
-        $this->app->singleton(SubscriptionService::class, fn (): SubscriptionService => new SubscriptionService($this->app->make(PaymentManager::class)));
+        $this->app->singleton(SubscriptionService::class, fn (): SubscriptionService => new SubscriptionService(
+            $this->app->make(PaymentManager::class),
+            $this->app->make(ProviderEventDispatcherResolver::class),
+        ));
         $this->app->singleton(FeatureGate::class, static fn (): FeatureGate => new FeatureGate);
         $this->app->singleton(LicenseManagerInterface::class, LicenseManager::class);
         $this->app->singleton(SubscriptionServiceInterface::class, SubscriptionService::class);

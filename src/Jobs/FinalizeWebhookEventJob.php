@@ -10,8 +10,10 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
+use SubscriptionGuard\LaravelSubscriptionGuard\Exceptions\ProviderException;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
 final class FinalizeWebhookEventJob implements ShouldQueue
 {
@@ -25,8 +27,10 @@ final class FinalizeWebhookEventJob implements ShouldQueue
         $this->onQueue((string) config('subscription-guard.queue.webhooks_queue', 'subguard-webhooks'));
     }
 
-    public function handle(PaymentManager $paymentManager): void
+    public function handle(PaymentManager $paymentManager, ?SubscriptionService $subscriptionService = null): void
     {
+        $subscriptionService ??= app(SubscriptionService::class);
+
         $lock = cache()->lock('subguard:webhook:'.$this->webhookCallId, 30);
 
         if (! $lock->get()) {
@@ -34,7 +38,7 @@ final class FinalizeWebhookEventJob implements ShouldQueue
         }
 
         try {
-            DB::transaction(function () use ($paymentManager): void {
+            DB::transaction(function () use ($paymentManager, $subscriptionService): void {
                 $webhookCall = WebhookCall::query()
                     ->lockForUpdate()
                     ->find($this->webhookCallId);
@@ -60,10 +64,47 @@ final class FinalizeWebhookEventJob implements ShouldQueue
                     return;
                 }
 
+                try {
+                    $providerAdapter = $paymentManager->provider($provider);
+                } catch (ProviderException) {
+                    $webhookCall->setAttribute('status', 'processed');
+                    $webhookCall->setAttribute('processed_at', now());
+                    $webhookCall->setAttribute('error_message', 'Provider adapter not configured; webhook accepted as no-op.');
+                    $webhookCall->save();
+
+                    return;
+                }
+
+                $payload = $webhookCall->getAttribute('payload');
+                $normalizedPayload = is_array($payload) ? $payload : [];
+                $signature = $this->extractSignature($provider, $webhookCall->getAttribute('headers'));
+
+                if (! $providerAdapter->validateWebhook($normalizedPayload, $signature)) {
+                    $webhookCall->setAttribute('status', 'failed');
+                    $webhookCall->setAttribute('error_message', 'Invalid webhook signature.');
+                    $webhookCall->setAttribute('processed_at', now());
+                    $webhookCall->save();
+
+                    return;
+                }
+
+                $result = $providerAdapter->processWebhook($normalizedPayload);
+
+                if (! $result->processed) {
+                    $webhookCall->setAttribute('status', 'failed');
+                    $webhookCall->setAttribute('error_message', $result->message ?? 'Webhook processing failed.');
+                    $webhookCall->setAttribute('processed_at', now());
+                    $webhookCall->save();
+
+                    return;
+                }
+
                 $webhookCall->setAttribute('status', 'processed');
                 $webhookCall->setAttribute('processed_at', now());
-                $webhookCall->setAttribute('error_message', null);
+                $webhookCall->setAttribute('error_message', $result->message);
                 $webhookCall->save();
+
+                $subscriptionService->handleWebhookResult($result, $provider);
 
                 $eventId = (string) $webhookCall->getAttribute('event_id');
 
@@ -76,5 +117,27 @@ final class FinalizeWebhookEventJob implements ShouldQueue
         } finally {
             $lock->release();
         }
+    }
+
+    private function extractSignature(string $provider, mixed $headers): string
+    {
+        $normalized = is_array($headers) ? $headers : [];
+        $signatureHeader = strtolower((string) config('subscription-guard.providers.drivers.'.$provider.'.signature_header', 'x-iyz-signature-v3'));
+
+        foreach ($normalized as $key => $value) {
+            if (strtolower((string) $key) !== $signatureHeader) {
+                continue;
+            }
+
+            if (is_array($value)) {
+                $first = $value[0] ?? '';
+
+                return is_scalar($first) ? (string) $first : '';
+            }
+
+            return is_scalar($value) ? (string) $value : '';
+        }
+
+        return '';
     }
 }

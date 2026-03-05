@@ -5,11 +5,16 @@ return [
         'default' => env('SUBGUARD_PROVIDER', 'iyzico'),
         'drivers' => [
             'iyzico' => [
+                'class' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider::class,
+                'event_dispatcher' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProviderEventDispatcher::class,
                 'manages_own_billing' => true,
                 'api_key' => env('IYZICO_API_KEY'),
                 'secret_key' => env('IYZICO_SECRET_KEY'),
+                'merchant_id' => null,
                 'base_url' => env('IYZICO_BASE_URL', 'https://sandbox-api.iyzipay.com'),
                 'callback_url' => env('IYZICO_CALLBACK_URL'),
+                'signature_header' => 'x-iyz-signature-v3',
+                'mock' => env('IYZICO_MOCK', true),
             ],
             'paytr' => [
                 'manages_own_billing' => false,
@@ -39,6 +44,8 @@ return [
         'dunning_command' => 'subguard:process-dunning',
         'suspend_command' => 'subguard:suspend-overdue',
         'plan_changes_command' => 'subguard:process-plan-changes',
+        'sync_plans_command' => 'subguard:sync-plans',
+        'reconcile_iyzico_command' => 'subguard:reconcile-iyzico-subscriptions',
     ],
 
     'logging' => [

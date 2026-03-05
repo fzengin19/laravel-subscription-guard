@@ -28,4 +28,12 @@
             <directory suffix=".php">./src</directory>
         </include>
     </source>
+    <php>
+        <server name="IYZICO_API_KEY" value=""/>
+        <server name="IYZICO_SECRET_KEY" value=""/>
+        <server name="IYZICO_BASE_URL" value="https://sandbox-api.iyzipay.com"/>
+        <server name="IYZICO_CALLBACK_URL" value="http://localhost:8000/subguard/webhooks/iyzico/checkout/callback"/>
+        <server name="IYZICO_MOCK" value="false"/>
+        <server name="SUBGUARD_WEBHOOK_PREFIX" value="subguard/webhooks"/>
+    </php>
 </phpunit>

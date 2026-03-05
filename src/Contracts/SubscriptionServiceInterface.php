@@ -6,6 +6,10 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Contracts;
 
 use DateTimeInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\DiscountResult;
+use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
+use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
+use SubscriptionGuard\LaravelSubscriptionGuard\Models\PaymentMethod;
+use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 
 interface SubscriptionServiceInterface
 {
@@ -30,4 +34,10 @@ interface SubscriptionServiceInterface
     public function processScheduledPlanChanges(DateTimeInterface $date): int;
 
     public function retryPastDuePayments(int|string $subscribableId): int;
+
+    public function handleWebhookResult(WebhookResult $result, string $provider): void;
+
+    public function handlePaymentResult(PaymentResponse $result, Subscription $subscription): void;
+
+    public function persistProviderPaymentMethod(string $provider, array $details): ?PaymentMethod;
 }
