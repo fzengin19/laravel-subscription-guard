@@ -48,6 +48,7 @@ return [
         'suspend_command' => 'subguard:suspend-overdue',
         'metered_command' => 'subguard:process-metered-billing',
         'plan_changes_command' => 'subguard:process-plan-changes',
+        'simulate_webhook_command' => 'subguard:simulate-webhook',
         'sync_plans_command' => 'subguard:sync-plans',
         'reconcile_iyzico_command' => 'subguard:reconcile-iyzico-subscriptions',
         'generate_license_command' => 'subguard:generate-license',
