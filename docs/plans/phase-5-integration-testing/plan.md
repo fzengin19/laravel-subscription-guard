@@ -2,13 +2,21 @@
 
 > **Süre**: 4 Hafta
 > **Durum**: Planlama
-> **Bağımlılıklar**: Faz 1, 2, 3, 4 (Tüm önceki fazlar)
+> **Bağımlılıklar**: Faz 1, 2, 3, 4, 4.1 (Tüm önceki fazlar)
 
 ---
 
 ## Özet
 
 Webhook simulation, end-to-end tests, performance tests, security audit, notifications, invoice PDF/e-Fatura hook, dokümantasyon.
+
+## Faz 5 Giriş Kapısı
+
+- Faz 4.1 `work-results.md` içinde closure checklist tamamlanmış olmalı
+- Faz 4.1 `risk-notes.md` içinde açık kritik borç kalmamalı
+- Mock/placeholder production path borçları kapatılmış olmalı
+
+> **Giris Durumu (2026-03-05)**: Hazir (Faz 4.1 closure dokumanlari tamamlandi)
 
 ---
 

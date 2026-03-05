@@ -1,8 +1,8 @@
 # Laravel Subscription Guard - Master Plan
 
-> **Versiyon**: 2.2 (Yol Haritası)
+> **Versiyon**: 2.7 (Yol Haritası)
 > **Tarih**: 2026-03-03
-> **Durum**: Execution in Progress (Faz 1-3 tamamlandı)
+> **Durum**: Execution in Progress (Faz 1-4.1 tamamlandı, Faz 5 beklemede)
 
 ---
 
@@ -87,7 +87,7 @@ Faz 1 kodlamasına başlamadan önce aşağıdaki kapılar **zorunlu** olarak ne
 | License key format + revocation distribution | Tanımlı | Faz 4 | Evet |
 | Command scope (`subguard:install` dahil) | Tanımlı | Faz 1-5 | Evet |
 | Logging kanal stratejisi | Tanımlı | Faz 1 | Evet |
-| Timezone/billing anchor politikası | Tanımlı | Faz 4-5 | Evet |
+| Timezone/billing anchor politikası | Tanımlı | Faz 4-4.1-5 | Evet |
 | Coupon/discount implementation ownership | Tanımlı | Faz 5 | Evet |
 | Faz 0 bootstrap (Testbench + Pest + CI iskeleti) | Tanımlı | Faz 1 başlangıcı | Evet |
 
@@ -184,6 +184,24 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 - Feature gating middleware
 - License events ve listeners
 - Test suite
+
+---
+
+### Faz 4.1: Implementation Closure & Hardening (2 Hafta)
+**Detaylı Plan**: `phase-4-1-implementation-closure/plan.md`
+**Durum**: Tamamlandi (2026-03-05)
+
+**Kapsam**:
+- Mock/placeholder kalan akışların production path kapanışı
+- PayTR live endpoint boşluklarının kapatılması
+- Revocation/heartbeat operasyonel hardening
+- Grace period ve dunning checklist kapanışı
+- Metered billing reliability ve architecture conformance gate
+
+**Çıktılar**:
+- Faz 4.1 closure checklist raporu
+- Phase 5 öncesi readiness sign-off
+- Güncellenmiş risk/work-results notları
 
 ---
 
@@ -451,6 +469,16 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 ---
 
 ## Değişiklik Günlüğü
+
+### v2.7 (2026-03-05)
+- Faz 4.1 closure/hardening uygulamasi tamamlandi olarak isaretlendi
+- Faz 3 ve Faz 4 risk notlarinda Faz 4.1 ile kapanan teknik borclar işlendi
+- Faz 5 giris kapisi icin readiness durumu netlestirildi
+
+### v2.6 (2026-03-05)
+- Faz 4.1 (Implementation Closure & Hardening) Faz 4 ile Faz 5 arasına eklendi
+- Faz 5 öncesi closure/hardening geçiş kapısı master roadmap'e işlendi
+- Faz ownership ve timezone gate satırları 4.1 fazını kapsayacak şekilde güncellendi
 
 ### v2.5 (2026-03-05)
 - Faz 3 (PayTR Provider) tamamlandı olarak işaretlendi

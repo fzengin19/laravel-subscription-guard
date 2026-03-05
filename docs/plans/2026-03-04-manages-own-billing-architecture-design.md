@@ -1,7 +1,7 @@
 # Billing Orchestration and Provider Boundaries Design
 
 > **Date**: 2026-03-04
-> **Scope**: Master + Phase 1-5 alignment gate
+> **Scope**: Master + Phase 1-5 alignment gate (Phase 4.1 dahil)
 > **Status**: Mandatory architecture contract
 
 ---
@@ -119,6 +119,7 @@ Minimum required fields:
 - **Phase 2**: Apply architecture for iyzico; remove provider mutation/event dispatch from adapter and finalizer.
 - **Phase 3**: Implement PayTR with same contract; no duplication of mutation/event logic.
 - **Phase 4**: License bridge listens to generic billing/subscription events only.
+- **Phase 4.1**: Implementation closure hardening + architecture conformance readiness gate.
 - **Phase 5**: Add architecture conformance tests (provider purity, job agnosticism, event hierarchy).
 
 ---

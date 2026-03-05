@@ -37,6 +37,10 @@ docs/plans/
 │   ├── plan.md
 │   ├── work-results.md
 │   └── risk-notes.md
+├── phase-4-1-implementation-closure/
+│   ├── plan.md
+│   ├── work-results.md
+│   └── risk-notes.md
 └── phase-5-integration-testing/
     ├── plan.md
     ├── work-results.md
@@ -92,9 +96,10 @@ Bir faz tamamlandığında:
 | 2. iyzico Provider | 4 hafta | Bekliyor | [plan.md](phase-2-iyzico-provider/plan.md) |
 | 3. PayTR Provider | 3 hafta | Bekliyor | [plan.md](phase-3-paytr-provider/plan.md) |
 | 4. Licensing System | 5 hafta | Bekliyor | [plan.md](phase-4-licensing-system/plan.md) |
+| 4.1. Implementation Closure | 2 hafta | Planlama | [plan.md](phase-4-1-implementation-closure/plan.md) |
 | 5. Integration & Testing | 4 hafta | Bekliyor | [plan.md](phase-5-integration-testing/plan.md) |
 
-**Toplam Süre**: 20 hafta
+**Toplam Süre**: 22 hafta
 
 ---
 
