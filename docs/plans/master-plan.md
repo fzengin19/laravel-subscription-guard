@@ -2,7 +2,7 @@
 
 > **Versiyon**: 2.2 (Yol Haritası)
 > **Tarih**: 2026-03-03
-> **Durum**: Execution in Progress (Faz 1 tamamlandı)
+> **Durum**: Execution in Progress (Faz 1-3 tamamlandı)
 
 ---
 
@@ -148,6 +148,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 3: PayTR Provider (3 Hafta)
 **Detaylı Plan**: `phase-3-paytr-provider/plan.md`
+**Durum**: Tamamlandı (2026-03-05)
 
 **Kapsam**:
 - PayTR iFrame API entegrasyonu
@@ -450,6 +451,10 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 ---
 
 ## Değişiklik Günlüğü
+
+### v2.5 (2026-03-05)
+- Faz 3 (PayTR Provider) tamamlandı olarak işaretlendi
+- `phase-3-paytr-provider/work-results.md` ve `phase-3-paytr-provider/risk-notes.md` güncellendi
 
 ### v2.4 (2026-03-04)
 - Cross-phase billing architecture contract zorunlu hale getirildi
