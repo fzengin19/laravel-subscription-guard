@@ -5,7 +5,7 @@
 > **Güncelleme Tarihi**: 2026-03-05
 
 ## Karşılaşılan Riskler
-- **Provider live endpoint boşluğu**: `pay`, `chargeRecurring`, `refund`, `createSubscription` için live entegrasyon henüz placeholder yanıt dönüyor.
+- **Provider live endpoint boşluğu**: `pay`, `chargeRecurring`, `refund`, `createSubscription` için live entegrasyon placeholder yanıt dönüyordu (Faz 4.1'de kapatıldı).
 - **Webhook/charge yarışı**: Senkron tahsilat ile asenkron webhook aynı işlemi iki kez mutasyona sokabilir.
 - **PayTR self-managed retry kırılganlığı**: Başarılı tahsilat sonrası lokal commit hatasında tekrar charge riski.
 - **Operasyonel izin riski**: Non3D recurring izin/merchant tarafı hazırlığı eksik kalırsa üretimde tahsilat akışı bloklanır.
@@ -22,6 +22,6 @@
 - PayTR live API uçları devreye alınırken adapter sınırları korunmalı (DB mutation ve domain event dispatch provider katmanında kalmamalı).
 
 ## Technical Debt
-- PayTR live charge/refund/createSubscription akışları henüz production-ready değil (placeholder yanıtlar mevcut).
+- PayTR live charge/refund/createSubscription placeholder borcu Faz 4.1'de kapatıldı.
 - Non3D izin doğrulaması ve merchant onboarding kontrol listesi kod seviyesinde enforce edilmiyor, operasyonel dokümana bağımlı.
 - Provider sınıfı ileride HTTP istemci/mapper/parsing bileşenlerine ayrıştırılarak sadeleştirilebilir.

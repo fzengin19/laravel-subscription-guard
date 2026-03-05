@@ -36,7 +36,7 @@
 - Event ordering ve duplicate event idempotency kuralları listener katmanında daha da sıkılaştırılmalı.
 
 ## Technical Debt
-- Revocation feed senkronizasyonu şu an sadece local cache store seviyesinde; uzak full/delta endpoint client henüz yok.
-- Heartbeat update akışı validation endpointi üzerinden var; fakat ayrı heartbeat ingest/sync command'i henüz yok.
+- Revocation feed senkronizasyonu Faz 4.1'de `subguard:sync-license-revocations` komutu ile remote full/delta destekleyecek şekilde kapatıldı.
+- Heartbeat update akışı Faz 4.1'de `subguard:sync-license-heartbeats` komutu ile operasyonel sync yoluna kavuştu.
 - Lisans persistence şu an owner/plan varlığına bağlı opportunistic akışta; key lifecycle için tam state machine henüz yok.
-- Metered billing command+processor eklendi; ancak provider gerçek tahsilat adımı şu an transaction ledger yazımıyla sınırlı, provider charge entegrasyonu sertleştirilmeli.
+- Metered billing provider-charge hardening Faz 4.1'de self-managed provider charge yoluna taşındı; ileri adım olarak webhook/renewal race regresyonları Faz 5 E2E paketinde izlenecek.
