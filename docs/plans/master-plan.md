@@ -1,8 +1,8 @@
 # Laravel Subscription Guard - Master Plan
 
-> **Versiyon**: 2.7 (Yol Haritası)
+> **Versiyon**: 2.9 (Yol Haritası)
 > **Tarih**: 2026-03-03
-> **Durum**: Execution in Progress (Faz 1-4.1 tamamlandı, Faz 5 beklemede)
+> **Durum**: Execution in Progress (Faz 1-5 tamamlandı)
 
 ---
 
@@ -469,6 +469,16 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 ---
 
 ## Değişiklik Günlüğü
+
+### v2.9 (2026-03-05)
+- Faz 5 integration and testing kapanisi tamamlandi
+- Security/performance/architecture audit artefaktlari eklendi
+- Coupon/discount ownership kapanisi ve Faz 5 dokuman seti tamamlandi
+
+### v2.8 (2026-03-05)
+- Faz 5 uygulamasi Slice A-D seviyesinde baslatildi ve ilerleme kayitlari eklendi
+- Webhook simulator, notification pipeline ve invoice PDF modulu roadmap ile hizalandi
+- README + PROVIDERS + RECIPES dokumanlari Faz 5 kapsamina gore guncellendi
 
 ### v2.7 (2026-03-05)
 - Faz 4.1 closure/hardening uygulamasi tamamlandi olarak isaretlendi
