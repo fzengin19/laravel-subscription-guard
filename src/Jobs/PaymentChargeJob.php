@@ -98,12 +98,18 @@ final class PaymentChargeJob implements ShouldQueue
                 }
 
                 $retryCount = (int) $transaction->getAttribute('retry_count') + 1;
+                $failureReason = (string) ($response->failureReason ?? 'Provider recurring charge failed.');
+                $terminalFailure = $this->isTerminalFailure($failureReason);
+
+                if ($terminalFailure) {
+                    $retryCount = 3;
+                }
 
                 $transaction->setAttribute('retry_count', $retryCount);
                 $transaction->setAttribute('status', 'failed');
-                $transaction->setAttribute('failure_reason', (string) ($response->failureReason ?? 'Provider recurring charge failed.'));
+                $transaction->setAttribute('failure_reason', $failureReason);
                 $transaction->setAttribute('last_retry_at', now());
-                $transaction->setAttribute('next_retry_at', $this->nextRetryDate($retryCount));
+                $transaction->setAttribute('next_retry_at', $terminalFailure ? null : $this->nextRetryDate($retryCount));
                 $transaction->setAttribute('processed_at', now());
                 $transaction->setAttribute('provider_response', $response->providerResponse);
                 $transaction->save();
@@ -201,5 +207,22 @@ final class PaymentChargeJob implements ShouldQueue
         }
 
         return now()->addDays($retryDays[$retryCount - 1]);
+    }
+
+    private function isTerminalFailure(string $failureReason): bool
+    {
+        $normalized = strtolower(trim($failureReason));
+
+        if ($normalized === '') {
+            return false;
+        }
+
+        return in_array($normalized, [
+            'hard_decline',
+            'do_not_honor',
+            'stolen_card',
+            'lost_card',
+            'invalid_card',
+        ], true);
     }
 }

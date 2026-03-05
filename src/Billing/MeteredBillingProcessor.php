@@ -7,13 +7,18 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Billing;
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\LicenseUsage;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use Throwable;
 
 final class MeteredBillingProcessor
 {
+    public function __construct(private readonly PaymentManager $paymentManager) {}
+
     public function process(DateTimeInterface $date): int
     {
         $count = 0;
@@ -72,38 +77,78 @@ final class MeteredBillingProcessor
 
                 $idempotencyKey = sprintf('subguard:metered:%d:%s', (int) $locked->getKey(), $periodToken);
 
-                $transaction = Transaction::query()->firstOrCreate(
-                    ['idempotency_key' => $idempotencyKey],
-                    [
-                        'subscription_id' => $locked->getKey(),
-                        'payable_type' => (string) $locked->getAttribute('subscribable_type'),
-                        'payable_id' => (int) $locked->getAttribute('subscribable_id'),
-                        'license_id' => (int) $licenseId,
-                        'provider' => (string) $locked->getAttribute('provider'),
-                        'provider_transaction_id' => null,
-                        'type' => 'metered_usage',
-                        'status' => 'processed',
-                        'amount' => $amount,
-                        'tax_amount' => 0,
-                        'tax_rate' => 0,
-                        'currency' => (string) $locked->getAttribute('currency'),
-                        'processed_at' => now(),
-                        'provider_response' => [
-                            'usage_total' => $totalUsage,
-                            'price_per_unit' => $pricePerUnit,
-                            'period_start' => $periodStart->toIso8601String(),
-                            'period_end' => $periodEnd->toIso8601String(),
-                        ],
-                        'metadata' => [
-                            'metered' => true,
-                            'usage_total' => $totalUsage,
-                        ],
-                    ]
-                );
+                $provider = (string) $locked->getAttribute('provider');
+                $transaction = Transaction::query()->firstOrNew(['idempotency_key' => $idempotencyKey]);
 
-                if (! $transaction->wasRecentlyCreated) {
+                if ((string) $transaction->getAttribute('status') === 'processed') {
                     return false;
                 }
+
+                $baseProviderResponse = [
+                    'usage_total' => $totalUsage,
+                    'price_per_unit' => $pricePerUnit,
+                    'period_start' => $periodStart->toIso8601String(),
+                    'period_end' => $periodEnd->toIso8601String(),
+                ];
+
+                if (! $transaction->exists) {
+                    $transaction->setAttribute('subscription_id', $locked->getKey());
+                    $transaction->setAttribute('payable_type', (string) $locked->getAttribute('subscribable_type'));
+                    $transaction->setAttribute('payable_id', (int) $locked->getAttribute('subscribable_id'));
+                    $transaction->setAttribute('license_id', (int) $licenseId);
+                    $transaction->setAttribute('provider', $provider);
+                    $transaction->setAttribute('type', 'metered_usage');
+                    $transaction->setAttribute('amount', $amount);
+                    $transaction->setAttribute('tax_amount', 0);
+                    $transaction->setAttribute('tax_rate', 0);
+                    $transaction->setAttribute('currency', (string) $locked->getAttribute('currency'));
+                    $transaction->setAttribute('metadata', [
+                        'metered' => true,
+                        'usage_total' => $totalUsage,
+                    ]);
+                }
+
+                $requiresProviderCharge = ! $this->paymentManager->managesOwnBilling($provider);
+
+                if ($requiresProviderCharge) {
+                    $chargeResponse = $this->chargeProvider($locked, $amount, $idempotencyKey);
+
+                    if (! $chargeResponse->success) {
+                        $retryCount = max(1, (int) $transaction->getAttribute('retry_count') + 1);
+                        $transaction->setAttribute('status', 'failed');
+                        $transaction->setAttribute('retry_count', $retryCount);
+                        $transaction->setAttribute('failure_reason', (string) ($chargeResponse->failureReason ?? 'Metered provider charge failed.'));
+                        $transaction->setAttribute('last_retry_at', now());
+                        $transaction->setAttribute('provider_transaction_id', $chargeResponse->transactionId);
+                        $transaction->setAttribute('provider_response', array_merge($baseProviderResponse, [
+                            'idempotency_key' => $idempotencyKey,
+                            'charge_success' => false,
+                            'charge_provider_response' => $chargeResponse->providerResponse,
+                        ]));
+                        $transaction->save();
+
+                        return false;
+                    }
+
+                    $transaction->setAttribute('provider_transaction_id', $chargeResponse->transactionId);
+                    $transaction->setAttribute('provider_response', array_merge($baseProviderResponse, [
+                        'idempotency_key' => $idempotencyKey,
+                        'charge_success' => true,
+                        'charge_provider_response' => $chargeResponse->providerResponse,
+                    ]));
+                } else {
+                    $transaction->setAttribute('provider_transaction_id', null);
+                    $transaction->setAttribute('provider_response', array_merge($baseProviderResponse, [
+                        'idempotency_key' => $idempotencyKey,
+                        'charge_success' => true,
+                        'charge_provider_response' => [],
+                    ]));
+                }
+
+                $transaction->setAttribute('status', 'processed');
+                $transaction->setAttribute('processed_at', now());
+                $transaction->setAttribute('failure_reason', null);
+                $transaction->save();
 
                 $usageQuery->delete();
 
@@ -139,5 +184,25 @@ final class MeteredBillingProcessor
             'weekly' => $next->addWeeks($interval),
             default => $next->addMonths($interval),
         };
+    }
+
+    private function chargeProvider(Subscription $subscription, float $amount, string $idempotencyKey): PaymentResponse
+    {
+        try {
+            $providerName = (string) $subscription->getAttribute('provider');
+            $provider = $this->paymentManager->provider($providerName);
+
+            return $provider->chargeRecurring($subscription->toArray(), $amount, $idempotencyKey);
+        } catch (Throwable $exception) {
+            return new PaymentResponse(
+                success: false,
+                transactionId: null,
+                providerResponse: [
+                    'exception' => get_class($exception),
+                    'message' => $exception->getMessage(),
+                ],
+                failureReason: 'Metered provider charge exception.'
+            );
+        }
     }
 }

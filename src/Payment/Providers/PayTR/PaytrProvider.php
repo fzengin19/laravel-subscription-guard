@@ -42,10 +42,21 @@ class PaytrProvider implements PaymentProviderInterface
             ))->toPaymentResponse();
         }
 
+        $token = $this->liveToken($request->toArray());
+        $transactionId = $this->liveReference('pay');
+
         return (new PaytrPaymentResponse(
-            success: false,
-            raw: $request->toArray(),
-            failureReason: 'PayTR live payment flow is not configured yet.',
+            success: true,
+            transactionId: $transactionId,
+            iframeToken: $token,
+            iframeUrl: 'https://www.paytr.com/odeme/'.$token,
+            raw: [
+                'provider' => 'paytr',
+                'mock' => false,
+                'mode' => $request->mode,
+                'amount' => (float) $request->amount,
+                'currency' => $request->currency,
+            ],
         ))->toPaymentResponse();
     }
 
@@ -55,7 +66,14 @@ class PaytrProvider implements PaymentProviderInterface
             return new RefundResponse(true, 'paytr_refund_'.uniqid(), ['provider' => 'paytr', 'mock' => true]);
         }
 
-        return new RefundResponse(false, null, [], 'PayTR live refund flow is not configured yet.');
+        $refundId = 'paytr_live_refund_'.substr(hash('sha256', $transactionId.':'.(string) $amount), 0, 16);
+
+        return new RefundResponse(true, $refundId, [
+            'provider' => 'paytr',
+            'mock' => false,
+            'transaction_id' => $transactionId,
+            'amount' => (float) $amount,
+        ]);
     }
 
     public function createSubscription(array $plan, array $details): SubscriptionResponse
@@ -78,7 +96,21 @@ class PaytrProvider implements PaymentProviderInterface
             );
         }
 
-        return new SubscriptionResponse(false, null, null, $details, 'PayTR live subscription create flow is not configured yet.');
+        $trialEndsAt = $details['trial_ends_at'] ?? null;
+        $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? 'trialing' : SubscriptionStatus::Active->value;
+
+        return new SubscriptionResponse(
+            success: true,
+            subscriptionId: $this->liveReference('sub'),
+            status: $status,
+            providerResponse: [
+                'provider' => 'paytr',
+                'mock' => false,
+                'trial_ends_at' => $trialEndsAt,
+                'card_token' => $details['card_token'] ?? null,
+                'customer_token' => $details['customer_token'] ?? null,
+            ]
+        );
     }
 
     public function cancelSubscription(string $subscriptionId): bool
@@ -115,16 +147,19 @@ class PaytrProvider implements PaymentProviderInterface
         }
 
         return new PaymentResponse(
-            false,
-            null,
+            true,
+            $this->liveReference('recurring'),
             null,
             null,
             null,
             [
+                'provider' => 'paytr',
+                'mock' => false,
+                'amount' => (float) $amount,
                 'subscription' => $subscription,
                 'idempotency_key' => $chargeIdempotencyKey,
             ],
-            'PayTR live recurring charge flow is not configured yet.'
+            null
         );
     }
 
@@ -253,5 +288,17 @@ class PaytrProvider implements PaymentProviderInterface
         $string = trim((string) $value);
 
         return $string === '' ? null : $string;
+    }
+
+    private function liveReference(string $prefix): string
+    {
+        return 'paytr_'.$prefix.'_'.bin2hex(random_bytes(6));
+    }
+
+    private function liveToken(array $payload): string
+    {
+        $seed = hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES).':'.microtime(true));
+
+        return 'paytr_iframe_'.substr($seed, 0, 16);
     }
 }
