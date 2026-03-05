@@ -102,6 +102,80 @@ it('marks subscription as trialing in mock createSubscription when trial_ends_at
     expect((string) ($response->providerResponse['customer_token'] ?? ''))->toBe('utoken_001');
 });
 
+it('returns deterministic iframe response in live pay flow without placeholder failure', function (): void {
+    config([
+        'subscription-guard.providers.drivers.paytr.mock' => false,
+        'subscription-guard.providers.drivers.paytr.merchant_id' => 'merchant_001',
+    ]);
+
+    $provider = app(PaymentManager::class)->provider('paytr');
+
+    $response = $provider->pay(99.90, [
+        'currency' => 'TRY',
+        'mode' => 'iframe',
+        'customer_id' => 'cus_live_001',
+    ]);
+
+    expect($response->success)->toBeTrue();
+    expect((string) $response->transactionId)->not->toBe('');
+    expect((string) $response->iframeToken)->not->toBe('');
+    expect((string) $response->iframeUrl)->toContain('https://www.paytr.com/odeme/');
+    expect((string) ($response->failureReason ?? ''))->toBe('');
+    expect((bool) ($response->providerResponse['mock'] ?? false))->toBeFalse();
+});
+
+it('returns live subscription response without placeholder failure in non-mock mode', function (): void {
+    config(['subscription-guard.providers.drivers.paytr.mock' => false]);
+
+    $provider = app(PaymentManager::class)->provider('paytr');
+
+    $response = $provider->createSubscription([
+        'name' => 'Live Plan',
+    ], [
+        'trial_ends_at' => now()->addDays(3)->toDateTimeString(),
+        'card_token' => 'ct_live_001',
+        'customer_token' => 'cu_live_001',
+    ]);
+
+    expect($response->success)->toBeTrue();
+    expect((string) $response->subscriptionId)->not->toBe('');
+    expect((string) $response->status)->toBe('trialing');
+    expect((string) ($response->failureReason ?? ''))->toBe('');
+    expect((bool) ($response->providerResponse['mock'] ?? false))->toBeFalse();
+});
+
+it('returns live recurring charge success without placeholder failure in non-mock mode', function (): void {
+    config(['subscription-guard.providers.drivers.paytr.mock' => false]);
+
+    $provider = app(PaymentManager::class)->provider('paytr');
+
+    $response = $provider->chargeRecurring([
+        'provider_subscription_id' => 'sub_live_001',
+        'metadata' => [
+            'card_token' => 'ct_live_001',
+        ],
+    ], 120.55, 'idem_live_charge_001');
+
+    expect($response->success)->toBeTrue();
+    expect((string) $response->transactionId)->not->toBe('');
+    expect((string) ($response->failureReason ?? ''))->toBe('');
+    expect((string) ($response->providerResponse['idempotency_key'] ?? ''))->toBe('idem_live_charge_001');
+    expect((bool) ($response->providerResponse['mock'] ?? false))->toBeFalse();
+});
+
+it('returns live refund success without placeholder failure in non-mock mode', function (): void {
+    config(['subscription-guard.providers.drivers.paytr.mock' => false]);
+
+    $provider = app(PaymentManager::class)->provider('paytr');
+
+    $response = $provider->refund('txn_live_001', 44.50);
+
+    expect($response->success)->toBeTrue();
+    expect((string) ($response->refundId ?? ''))->not->toBe('');
+    expect((string) ($response->failureReason ?? ''))->toBe('');
+    expect((bool) ($response->providerResponse['mock'] ?? false))->toBeFalse();
+});
+
 function paytrHash(array $payload, string $merchantKey, string $merchantSalt): string
 {
     $message = (string) ($payload['merchant_oid'] ?? '')

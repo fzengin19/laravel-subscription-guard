@@ -151,6 +151,72 @@ it('marks subscription past_due and schedules retry when recurring charge fails'
     expect($subscription->fresh()?->getAttribute('grace_ends_at'))->not->toBeNull();
 });
 
+it('marks hard decline as terminal failure without scheduling next retry', function (): void {
+    config([
+        'subscription-guard.providers.drivers.paytr.class' => TestHardDeclineChargeProvider::class,
+        'subscription-guard.providers.drivers.paytr.manages_own_billing' => false,
+    ]);
+
+    $userId = (int) DB::table('users')->insertGetId([
+        'name' => 'Phase3 Hard Decline User',
+        'email' => 'phase3-hard-decline-user@example.test',
+        'password' => 'secret',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $plan = Plan::query()->create([
+        'name' => 'Phase3 Hard Decline Plan',
+        'slug' => 'phase3-hard-decline-plan',
+        'price' => 109.00,
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'is_active' => true,
+    ]);
+
+    $subscription = Subscription::query()->create([
+        'subscribable_type' => 'App\\Models\\User',
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->getKey(),
+        'provider' => 'paytr',
+        'provider_subscription_id' => 'paytr_sub_hard_001',
+        'status' => 'active',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'amount' => 109.00,
+        'currency' => 'TRY',
+        'next_billing_date' => now(),
+    ]);
+
+    $transaction = Transaction::query()->create([
+        'subscription_id' => $subscription->getKey(),
+        'payable_type' => 'App\\Models\\User',
+        'payable_id' => $userId,
+        'provider' => 'paytr',
+        'type' => 'renewal',
+        'status' => 'pending',
+        'amount' => 109.00,
+        'currency' => 'TRY',
+        'retry_count' => 0,
+        'idempotency_key' => 'phase3:charge:hard-decline:001',
+    ]);
+
+    (new PaymentChargeJob($transaction->getKey()))->handle(
+        app(PaymentManager::class),
+        app(SubscriptionService::class)
+    );
+
+    $freshTransaction = $transaction->fresh();
+
+    expect((string) $freshTransaction?->getAttribute('status'))->toBe('failed');
+    expect((int) $freshTransaction?->getAttribute('retry_count'))->toBe(3);
+    expect($freshTransaction?->getAttribute('next_retry_at'))->toBeNull();
+    expect((string) ($freshTransaction?->getAttribute('failure_reason') ?? ''))->toBe('hard_decline');
+    expect((string) $subscription->fresh()?->getAttribute('status'))->toBe('past_due');
+    expect($subscription->fresh()?->getAttribute('grace_ends_at'))->not->toBeNull();
+});
+
 it('dispatches paytr provider events through subscription service webhook orchestration', function (): void {
     Event::fake([WebhookReceived::class, PaytrPaymentCompleted::class]);
 
@@ -322,6 +388,54 @@ final class TestFailureChargeProvider extends PaytrProvider
             transactionId: null,
             providerResponse: ['source' => 'phase3-preflight-test'],
             failureReason: 'insufficient_balance'
+        );
+    }
+
+    public function pay(int|float|string $amount, array $details): PaymentResponse
+    {
+        return new PaymentResponse(false, null, null, null, null, [], 'not-used');
+    }
+
+    public function refund(string $transactionId, int|float|string $amount): RefundResponse
+    {
+        return new RefundResponse(false, null, [], 'not-used');
+    }
+
+    public function createSubscription(array $plan, array $details): SubscriptionResponse
+    {
+        return new SubscriptionResponse(false, null, null, [], 'not-used');
+    }
+
+    public function cancelSubscription(string $subscriptionId): bool
+    {
+        return false;
+    }
+
+    public function upgradeSubscription(string $subscriptionId, int|string $newPlanId, string $mode = 'next_period'): SubscriptionResponse
+    {
+        return new SubscriptionResponse(false, null, null, [], 'not-used');
+    }
+
+    public function validateWebhook(array $payload, string $signature): bool
+    {
+        return false;
+    }
+
+    public function processWebhook(array $payload): WebhookResult
+    {
+        return new WebhookResult(false);
+    }
+}
+
+final class TestHardDeclineChargeProvider extends PaytrProvider
+{
+    public function chargeRecurring(array $subscription, int|float|string $amount, ?string $idempotencyKey = null): PaymentResponse
+    {
+        return new PaymentResponse(
+            success: false,
+            transactionId: null,
+            providerResponse: ['source' => 'phase3-preflight-test'],
+            failureReason: 'hard_decline'
         );
     }
 
