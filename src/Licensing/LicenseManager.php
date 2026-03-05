@@ -308,7 +308,7 @@ final class LicenseManager implements LicenseManagerInterface
             return;
         }
 
-        License::query()->firstOrCreate(
+        License::unguarded(static fn (): License => License::query()->firstOrCreate(
             ['key' => $licenseKey],
             [
                 'user_id' => $ownerId,
@@ -317,6 +317,6 @@ final class LicenseManager implements LicenseManagerInterface
                 'expires_at' => isset($payload['exp']) ? now()->setTimestamp((int) $payload['exp']) : null,
                 'heartbeat_at' => now(),
             ]
-        );
+        ));
     }
 }

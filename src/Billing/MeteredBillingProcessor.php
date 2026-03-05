@@ -78,7 +78,7 @@ final class MeteredBillingProcessor
                 $idempotencyKey = sprintf('subguard:metered:%d:%s', (int) $locked->getKey(), $periodToken);
 
                 $provider = (string) $locked->getAttribute('provider');
-                $transaction = Transaction::query()->firstOrNew(['idempotency_key' => $idempotencyKey]);
+                $transaction = Transaction::unguarded(static fn (): Transaction => Transaction::query()->firstOrNew(['idempotency_key' => $idempotencyKey]));
 
                 if ((string) $transaction->getAttribute('status') === 'processed') {
                     return false;

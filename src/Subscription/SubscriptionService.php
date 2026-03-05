@@ -47,7 +47,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
     {
         $plan = Plan::query()->findOrFail($planId);
 
-        $subscription = Subscription::query()->create([
+        $subscription = Subscription::unguarded(fn (): Subscription => Subscription::query()->create([
             'subscribable_type' => (string) config('auth.providers.users.model', 'App\\Models\\User'),
             'subscribable_id' => $subscribableId,
             'plan_id' => $planId,
@@ -61,7 +61,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
             'metadata' => [
                 'payment_method_id' => $paymentMethodId,
             ],
-        ]);
+        ]));
 
         return $subscription->toArray();
     }
@@ -493,7 +493,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
             $providerTransactionId !== null && $providerTransactionId !== '' ? $providerTransactionId : hash('sha256', json_encode($result->providerResponse))
         );
 
-        $transaction = Transaction::query()->firstOrCreate(
+        $transaction = Transaction::unguarded(static fn (): Transaction => Transaction::query()->firstOrCreate(
             ['idempotency_key' => $idempotencyKey],
             [
                 'subscription_id' => $subscription->getKey(),
@@ -517,7 +517,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 'last_retry_at' => $result->success ? null : now(),
                 'provider_response' => $result->providerResponse,
             ]
-        );
+        ));
 
         if (! $transaction->wasRecentlyCreated) {
             return;
@@ -615,7 +615,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 ->update(['is_default' => false]);
         }
 
-        return PaymentMethod::query()->updateOrCreate(
+        return PaymentMethod::unguarded(static fn (): PaymentMethod => PaymentMethod::query()->updateOrCreate(
             [
                 'payable_type' => $payableType,
                 'payable_id' => (int) $payableId,
@@ -632,7 +632,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 'is_default' => $isDefault,
                 'is_active' => true,
             ]
-        );
+        ));
     }
 
     private function recordWebhookTransaction(Subscription $subscription, string $provider, WebhookResult $result, bool $success, ProviderEventDispatcherInterface $providerEvents): void
@@ -643,7 +643,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $resolvedDiscount = $this->resolveRenewalDiscount($subscription, (float) $amount);
         $amount = $resolvedDiscount['amount'];
 
-        $transaction = Transaction::query()->firstOrCreate(
+        $transaction = Transaction::unguarded(static fn (): Transaction => Transaction::query()->firstOrCreate(
             ['idempotency_key' => $provider.':webhook:'.$eventId],
             [
                 'subscription_id' => $subscription->getKey(),
@@ -667,7 +667,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 'last_retry_at' => $success ? null : now(),
                 'provider_response' => $result->metadata,
             ]
-        );
+        ));
 
         if (! $transaction->wasRecentlyCreated) {
             return;

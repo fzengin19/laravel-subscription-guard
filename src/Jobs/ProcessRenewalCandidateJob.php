@@ -96,7 +96,7 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
 
                 $resolvedDiscount = $subscriptionService->resolveRenewalDiscount($subscription, $amount);
 
-                $transaction = Transaction::query()->firstOrCreate(
+                $transaction = Transaction::unguarded(static fn (): Transaction => Transaction::query()->firstOrCreate(
                     ['idempotency_key' => $idempotencyKey],
                     [
                         'subscription_id' => $subscription->getKey(),
@@ -114,7 +114,7 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
                         'tax_rate' => $taxRate,
                         'currency' => $currency,
                     ]
-                );
+                ));
 
                 if (! $transaction->wasRecentlyCreated) {
                     return;
