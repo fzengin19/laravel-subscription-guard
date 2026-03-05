@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class LicenseUsage extends Model
 {
-    protected $guarded = [];
+    protected $guarded = ['id'];
 
     protected function casts(): array
     {

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class SubscriptionItem extends Model
 {
-    protected $guarded = [];
+    protected $guarded = ['id'];
 
     public function subscription(): BelongsTo
     {

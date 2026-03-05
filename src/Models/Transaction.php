@@ -13,7 +13,33 @@ class Transaction extends Model
 {
     use SoftDeletes;
 
-    protected $guarded = [];
+    protected $guarded = [
+        'id',
+        'provider',
+        'provider_transaction_id',
+        'provider_refund_id',
+        'idempotency_key',
+        'type',
+        'status',
+        'amount',
+        'tax_amount',
+        'tax_rate',
+        'discount_amount',
+        'refunded_amount',
+        'currency',
+        'provider_currency',
+        'exchange_rate',
+        'fee',
+        'retry_count',
+        'next_retry_at',
+        'last_retry_at',
+        'failure_reason',
+        'processed_at',
+        'refunded_at',
+        'provider_response',
+        'coupon_id',
+        'discount_id',
+    ];
 
     protected function casts(): array
     {

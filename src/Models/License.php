@@ -13,7 +13,18 @@ class License extends Model
 {
     use SoftDeletes;
 
-    protected $guarded = [];
+    protected $guarded = [
+        'id',
+        'status',
+        'expires_at',
+        'grace_ends_at',
+        'heartbeat_at',
+        'domain',
+        'feature_overrides',
+        'limit_overrides',
+        'max_activations',
+        'current_activations',
+    ];
 
     protected function casts(): array
     {

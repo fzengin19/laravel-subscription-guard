@@ -14,7 +14,25 @@ class Subscription extends Model
 {
     use SoftDeletes;
 
-    protected $guarded = [];
+    protected $guarded = [
+        'id',
+        'provider_subscription_id',
+        'provider_customer_id',
+        'status',
+        'amount',
+        'tax_amount',
+        'tax_rate',
+        'currency',
+        'trial_ends_at',
+        'next_billing_date',
+        'current_period_start',
+        'current_period_end',
+        'grace_ends_at',
+        'resumes_at',
+        'cancels_at',
+        'cancelled_at',
+        'scheduled_change_id',
+    ];
 
     protected function casts(): array
     {

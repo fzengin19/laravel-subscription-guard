@@ -12,7 +12,17 @@ class PaymentMethod extends Model
 {
     use SoftDeletes;
 
-    protected $guarded = [];
+    protected $guarded = [
+        'id',
+        'payable_type',
+        'payable_id',
+        'provider',
+        'provider_method_id',
+        'provider_card_token',
+        'provider_customer_token',
+        'is_default',
+        'is_active',
+    ];
 
     protected function casts(): array
     {
