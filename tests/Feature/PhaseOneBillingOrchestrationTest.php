@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\SubscriptionServiceInterface;
+use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessDunningRetryJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessRenewalCandidateJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessScheduledPlanChangeJob;
@@ -252,4 +253,5 @@ it('suspends overdue subscriptions and linked license with command', function ()
 
     expect($subscription->fresh()->status)->toBe('suspended');
     expect($license->fresh()->status)->toBe('suspended');
+    expect(SubscriptionStatus::normalize('suspended'))->toBe(SubscriptionStatus::Suspended);
 });

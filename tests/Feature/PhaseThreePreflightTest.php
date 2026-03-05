@@ -3,15 +3,18 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\RefundResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\SubscriptionResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
+use SubscriptionGuard\LaravelSubscriptionGuard\Events\WebhookReceived;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\PaymentChargeJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Events\PaytrPaymentCompleted;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider;
 use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
@@ -81,6 +84,120 @@ it('charges pending transaction through provider and records success', function 
     expect((string) $subscription->fresh()?->getAttribute('status'))->toBe('active');
 });
 
+it('marks subscription past_due and schedules retry when recurring charge fails', function (): void {
+    config([
+        'subscription-guard.providers.drivers.paytr.class' => TestFailureChargeProvider::class,
+        'subscription-guard.providers.drivers.paytr.manages_own_billing' => false,
+    ]);
+
+    $userId = (int) DB::table('users')->insertGetId([
+        'name' => 'Phase3 Charge Failure User',
+        'email' => 'phase3-charge-failure-user@example.test',
+        'password' => 'secret',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $plan = Plan::query()->create([
+        'name' => 'Phase3 Charge Failure Plan',
+        'slug' => 'phase3-charge-failure-plan',
+        'price' => 99.00,
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'is_active' => true,
+    ]);
+
+    $subscription = Subscription::query()->create([
+        'subscribable_type' => 'App\\Models\\User',
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->getKey(),
+        'provider' => 'paytr',
+        'provider_subscription_id' => 'paytr_sub_002',
+        'status' => 'active',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'amount' => 99.00,
+        'currency' => 'TRY',
+        'next_billing_date' => now(),
+    ]);
+
+    $transaction = Transaction::query()->create([
+        'subscription_id' => $subscription->getKey(),
+        'payable_type' => 'App\\Models\\User',
+        'payable_id' => $userId,
+        'provider' => 'paytr',
+        'type' => 'renewal',
+        'status' => 'pending',
+        'amount' => 99.00,
+        'currency' => 'TRY',
+        'retry_count' => 0,
+        'idempotency_key' => 'phase3:charge:pending:002',
+    ]);
+
+    (new PaymentChargeJob($transaction->getKey()))->handle(
+        app(PaymentManager::class),
+        app(SubscriptionService::class)
+    );
+
+    expect((string) $transaction->fresh()?->getAttribute('status'))->toBe('failed');
+    expect((int) $transaction->fresh()?->getAttribute('retry_count'))->toBe(1);
+    expect($transaction->fresh()?->getAttribute('next_retry_at'))->not->toBeNull();
+    expect((string) $subscription->fresh()?->getAttribute('status'))->toBe('past_due');
+    expect($subscription->fresh()?->getAttribute('grace_ends_at'))->not->toBeNull();
+});
+
+it('dispatches paytr provider events through subscription service webhook orchestration', function (): void {
+    Event::fake([WebhookReceived::class, PaytrPaymentCompleted::class]);
+
+    $userId = (int) DB::table('users')->insertGetId([
+        'name' => 'Phase3 Webhook Event User',
+        'email' => 'phase3-webhook-event-user@example.test',
+        'password' => 'secret',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $plan = Plan::query()->create([
+        'name' => 'Phase3 Webhook Event Plan',
+        'slug' => 'phase3-webhook-event-plan',
+        'price' => 79.00,
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'is_active' => true,
+    ]);
+
+    $subscription = Subscription::query()->create([
+        'subscribable_type' => 'App\\Models\\User',
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->getKey(),
+        'provider' => 'paytr',
+        'provider_subscription_id' => 'paytr_sub_evt_001',
+        'status' => 'past_due',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'amount' => 79.00,
+        'currency' => 'TRY',
+        'next_billing_date' => now(),
+    ]);
+
+    app(SubscriptionService::class)->handleWebhookResult(new WebhookResult(
+        processed: true,
+        eventId: 'evt_paytr_001',
+        eventType: 'subscription.order.success',
+        subscriptionId: 'paytr_sub_evt_001',
+        transactionId: 'paytr_tx_evt_001',
+        amount: 79.00,
+        status: 'active',
+        metadata: ['source' => 'phase3-preflight'],
+    ), 'paytr');
+
+    expect((string) $subscription->fresh()?->getAttribute('status'))->toBe('active');
+    Event::assertDispatched(WebhookReceived::class);
+    Event::assertDispatched(PaytrPaymentCompleted::class);
+});
+
 final class TestSuccessChargeProvider extends PaytrProvider
 {
     public function chargeRecurring(array $subscription, int|float|string $amount): PaymentResponse
@@ -89,6 +206,54 @@ final class TestSuccessChargeProvider extends PaytrProvider
             success: true,
             transactionId: 'paytr_txn_success_001',
             providerResponse: ['source' => 'phase3-preflight-test']
+        );
+    }
+
+    public function pay(int|float|string $amount, array $details): PaymentResponse
+    {
+        return new PaymentResponse(false, null, null, null, null, [], 'not-used');
+    }
+
+    public function refund(string $transactionId, int|float|string $amount): RefundResponse
+    {
+        return new RefundResponse(false, null, [], 'not-used');
+    }
+
+    public function createSubscription(array $plan, array $details): SubscriptionResponse
+    {
+        return new SubscriptionResponse(false, null, null, [], 'not-used');
+    }
+
+    public function cancelSubscription(string $subscriptionId): bool
+    {
+        return false;
+    }
+
+    public function upgradeSubscription(string $subscriptionId, int|string $newPlanId, string $mode = 'next_period'): SubscriptionResponse
+    {
+        return new SubscriptionResponse(false, null, null, [], 'not-used');
+    }
+
+    public function validateWebhook(array $payload, string $signature): bool
+    {
+        return false;
+    }
+
+    public function processWebhook(array $payload): WebhookResult
+    {
+        return new WebhookResult(false);
+    }
+}
+
+final class TestFailureChargeProvider extends PaytrProvider
+{
+    public function chargeRecurring(array $subscription, int|float|string $amount): PaymentResponse
+    {
+        return new PaymentResponse(
+            success: false,
+            transactionId: null,
+            providerResponse: ['source' => 'phase3-preflight-test'],
+            failureReason: 'insufficient_balance'
         );
     }
 

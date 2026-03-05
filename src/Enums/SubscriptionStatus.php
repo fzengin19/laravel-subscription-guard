@@ -12,6 +12,7 @@ enum SubscriptionStatus: string
     case PastDue = 'past_due';
     case Failed = 'failed';
     case Paused = 'paused';
+    case Suspended = 'suspended';
 
     public static function normalize(mixed $status): ?self
     {
@@ -25,6 +26,7 @@ enum SubscriptionStatus: string
             'past_due', 'unpaid' => self::PastDue,
             'failed' => self::Failed,
             'paused' => self::Paused,
+            'suspended' => self::Suspended,
             'canceled', 'cancelled', 'expired' => self::Cancelled,
             default => null,
         };

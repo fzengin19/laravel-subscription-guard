@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Testing\TestResponse;
@@ -295,6 +296,39 @@ it('accepts iyzico callback endpoints and persists callback payload', function (
     expect(WebhookCall::query()->where('event_type', 'payment.checkout.callback')->count())->toBe(1);
 });
 
+it('handles duplicate callback intake atomically for same event id', function (): void {
+    Bus::fake();
+
+    $payload = [
+        'conversationId' => '3ds-conv-duplicate-001',
+        'status' => 'success',
+    ];
+
+    $first = sendCallback('iyzico', '/3ds/callback', $payload);
+    $second = sendCallback('iyzico', '/3ds/callback', $payload);
+
+    $first->assertStatus(202)->assertJson([
+        'status' => 'accepted',
+        'provider' => 'iyzico',
+        'event_id' => '3ds-conv-duplicate-001',
+        'duplicate' => false,
+    ]);
+
+    $second->assertStatus(200)->assertJson([
+        'status' => 'accepted',
+        'provider' => 'iyzico',
+        'event_id' => '3ds-conv-duplicate-001',
+        'duplicate' => true,
+    ]);
+
+    expect(WebhookCall::query()
+        ->where('provider', 'iyzico')
+        ->where('event_id', '3ds-conv-duplicate-001')
+        ->count())->toBe(1);
+
+    Bus::assertDispatchedTimes(FinalizeWebhookEventJob::class, 1);
+});
+
 it('rejects iyzico callback when live mode signature is missing', function (): void {
     config()->set('subscription-guard.providers.drivers.iyzico.mock', false);
     config()->set('subscription-guard.providers.drivers.iyzico.secret_key', 'phase2-secret');
@@ -584,4 +618,47 @@ it('applies normalized webhook result through subscription service orchestration
 
     Event::assertDispatched(WebhookReceived::class);
     Event::assertDispatched(SubscriptionRenewed::class);
+});
+
+it('ignores out-of-order activation webhooks for cancelled subscriptions', function (): void {
+    $userId = (int) DB::table('users')->insertGetId([
+        'name' => 'Cancelled Guard User',
+        'email' => 'cancelled-guard-user@example.test',
+        'password' => 'secret',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $plan = Plan::query()->create([
+        'name' => 'Cancelled Guard Plan',
+        'slug' => 'cancelled-guard-plan',
+        'price' => 59.90,
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'is_active' => true,
+    ]);
+
+    $subscription = Subscription::query()->create([
+        'subscribable_type' => 'App\\Models\\User',
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->getKey(),
+        'provider' => 'iyzico',
+        'provider_subscription_id' => 'iyz_sub_cancelled_guard_001',
+        'status' => 'cancelled',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'amount' => 59.90,
+        'currency' => 'TRY',
+    ]);
+
+    app(SubscriptionService::class)->handleWebhookResult(new WebhookResult(
+        processed: true,
+        eventId: 'evt_out_of_order_001',
+        eventType: 'subscription.created',
+        subscriptionId: 'iyz_sub_cancelled_guard_001',
+        status: 'active',
+    ), 'iyzico');
+
+    expect((string) $subscription->fresh()?->getAttribute('status'))->toBe('cancelled');
 });

@@ -7,6 +7,7 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\DispatchBillingNotificationsJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\License;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
@@ -23,7 +24,7 @@ final class SuspendOverdueCommand extends Command
         $count = 0;
 
         $subscriptions = Subscription::query()
-            ->where('status', 'past_due')
+            ->where('status', SubscriptionStatus::PastDue->value)
             ->whereNotNull('grace_ends_at')
             ->where('grace_ends_at', '<=', $date)
             ->get();
@@ -38,11 +39,11 @@ final class SuspendOverdueCommand extends Command
                     return;
                 }
 
-                if ((string) $locked->getAttribute('status') !== 'past_due') {
+                if ((string) $locked->getAttribute('status') !== SubscriptionStatus::PastDue->value) {
                     return;
                 }
 
-                $locked->setAttribute('status', 'suspended');
+                $locked->setAttribute('status', SubscriptionStatus::Suspended->value);
                 $locked->save();
 
                 $licenseId = $locked->getAttribute('license_id');
@@ -53,7 +54,7 @@ final class SuspendOverdueCommand extends Command
                         ->find((int) $licenseId);
 
                     if ($license instanceof License) {
-                        $license->setAttribute('status', 'suspended');
+                        $license->setAttribute('status', SubscriptionStatus::Suspended->value);
                         $license->save();
                     }
                 }

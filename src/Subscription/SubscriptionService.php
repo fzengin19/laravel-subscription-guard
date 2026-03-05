@@ -315,6 +315,12 @@ final class SubscriptionService implements SubscriptionServiceInterface
         }
 
         $eventType = strtolower((string) ($result->eventType ?? ''));
+        $currentStatus = (string) $subscription->getAttribute('status');
+
+        if ($currentStatus === SubscriptionStatus::Cancelled->value
+            && in_array($eventType, ['subscription.created', 'subscription.order.success'], true)) {
+            return;
+        }
 
         if ($eventType === 'subscription.created') {
             $subscription->setAttribute('status', SubscriptionStatus::Active->value);

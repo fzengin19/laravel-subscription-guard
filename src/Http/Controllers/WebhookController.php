@@ -9,12 +9,13 @@ use Illuminate\Http\Request;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\FinalizeWebhookEventJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use Symfony\Component\HttpFoundation\Response;
 
 final class WebhookController
 {
     public function __construct(private readonly PaymentManager $paymentManager) {}
 
-    public function __invoke(Request $request, string $provider): JsonResponse
+    public function __invoke(Request $request, string $provider): JsonResponse|Response
     {
         if (! $this->paymentManager->hasProvider($provider)) {
             return response()->json([
@@ -34,6 +35,10 @@ final class WebhookController
             ->first();
 
         if ($existingCall instanceof WebhookCall) {
+            if ($provider === 'paytr') {
+                return response('OK', 200)->header('Content-Type', 'text/plain');
+            }
+
             return response()->json([
                 'status' => 'accepted',
                 'provider' => $provider,
@@ -54,6 +59,10 @@ final class WebhookController
 
         FinalizeWebhookEventJob::dispatch((int) $webhookCall->getKey())
             ->onQueue($this->paymentManager->queueName('webhooks_queue', 'subguard-webhooks'));
+
+        if ($provider === 'paytr') {
+            return response('OK', 200)->header('Content-Type', 'text/plain');
+        }
 
         return response()->json([
             'status' => 'accepted',

@@ -9,6 +9,9 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\RefundResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\SubscriptionResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
+use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Data\PaytrPaymentRequest;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Data\PaytrPaymentResponse;
 
 class PaytrProvider implements PaymentProviderInterface
 {
@@ -19,15 +22,31 @@ class PaytrProvider implements PaymentProviderInterface
 
     public function pay(int|float|string $amount, array $details): PaymentResponse
     {
+        $request = PaytrPaymentRequest::fromArray(array_merge($details, ['amount' => $amount]));
+
         if ($this->mockMode()) {
-            return new PaymentResponse(
+            $token = 'paytr_iframe_'.uniqid();
+
+            return (new PaytrPaymentResponse(
                 success: true,
                 transactionId: 'paytr_mock_'.uniqid(),
-                providerResponse: ['provider' => 'paytr', 'mock' => true, 'mode' => 'iframe']
-            );
+                iframeToken: $token,
+                iframeUrl: 'https://www.paytr.com/odeme/'.$token,
+                raw: [
+                    'provider' => 'paytr',
+                    'mock' => true,
+                    'mode' => 'iframe',
+                    'amount' => (float) $request->amount,
+                    'currency' => $request->currency,
+                ],
+            ))->toPaymentResponse();
         }
 
-        return new PaymentResponse(false, null, null, null, null, $details, 'PayTR live payment flow is not configured yet.');
+        return (new PaytrPaymentResponse(
+            success: false,
+            raw: $request->toArray(),
+            failureReason: 'PayTR live payment flow is not configured yet.',
+        ))->toPaymentResponse();
     }
 
     public function refund(string $transactionId, int|float|string $amount): RefundResponse
@@ -42,11 +61,20 @@ class PaytrProvider implements PaymentProviderInterface
     public function createSubscription(array $plan, array $details): SubscriptionResponse
     {
         if ($this->mockMode()) {
+            $trialEndsAt = $details['trial_ends_at'] ?? null;
+            $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? 'trialing' : SubscriptionStatus::Active->value;
+
             return new SubscriptionResponse(
                 success: true,
                 subscriptionId: 'paytr_sub_'.uniqid(),
-                status: 'active',
-                providerResponse: ['provider' => 'paytr', 'mock' => true]
+                status: $status,
+                providerResponse: [
+                    'provider' => 'paytr',
+                    'mock' => true,
+                    'trial_ends_at' => $trialEndsAt,
+                    'card_token' => $details['card_token'] ?? null,
+                    'customer_token' => $details['customer_token'] ?? null,
+                ]
             );
         }
 
@@ -91,24 +119,71 @@ class PaytrProvider implements PaymentProviderInterface
             return true;
         }
 
-        return trim($signature) !== '';
+        $merchantKey = trim((string) config('subscription-guard.providers.drivers.paytr.merchant_key', ''));
+        $merchantSalt = trim((string) config('subscription-guard.providers.drivers.paytr.merchant_salt', ''));
+
+        if ($merchantKey === '' || $merchantSalt === '') {
+            return false;
+        }
+
+        $providedSignature = trim($signature);
+
+        if ($providedSignature === '') {
+            $providedSignature = trim((string) ($payload['hash'] ?? ''));
+        }
+
+        if ($providedSignature === '') {
+            return false;
+        }
+
+        $expectedSignature = $this->webhookHash($payload, $merchantKey, $merchantSalt);
+
+        return hash_equals($expectedSignature, $providedSignature);
     }
 
     public function processWebhook(array $payload): WebhookResult
     {
-        $eventId = isset($payload['event_id']) ? (string) $payload['event_id'] : null;
-        $eventType = isset($payload['event_type']) ? (string) $payload['event_type'] : null;
-        $subscriptionId = isset($payload['subscription_id']) ? (string) $payload['subscription_id'] : null;
+        $eventId = $this->string($payload, 'merchant_oid')
+            ?? $this->string($payload, 'event_id')
+            ?? hash('sha256', (string) json_encode($payload));
+
+        $subscriptionId = $this->string($payload, 'subscription_id')
+            ?? $this->string($payload, 'provider_subscription_id')
+            ?? $this->string($payload, 'merchant_oid');
+
+        $transactionId = $this->string($payload, 'reference_no')
+            ?? $this->string($payload, 'payment_id')
+            ?? $this->string($payload, 'merchant_oid');
+
+        $paytrStatus = strtolower((string) ($payload['status'] ?? ''));
+
+        $eventType = match ($paytrStatus) {
+            'success' => 'subscription.order.success',
+            'failed' => 'subscription.order.failure',
+            default => (string) ($payload['event_type'] ?? 'subscription.order.failure'),
+        };
+
+        $normalizedStatus = match ($paytrStatus) {
+            'success' => SubscriptionStatus::Active->value,
+            'failed' => SubscriptionStatus::PastDue->value,
+            default => null,
+        };
+
+        $failedReason = $this->string($payload, 'failed_reason_msg');
+
+        $message = $paytrStatus === 'failed'
+            ? 'PayTR webhook failed: '.($failedReason ?? 'unknown')
+            : 'PayTR webhook succeeded.';
 
         return new WebhookResult(
             processed: true,
             eventId: $eventId,
             eventType: $eventType,
-            message: 'PayTR webhook parsed.',
+            message: $message,
             subscriptionId: $subscriptionId,
-            transactionId: isset($payload['transaction_id']) ? (string) $payload['transaction_id'] : null,
-            amount: isset($payload['amount']) ? (float) $payload['amount'] : null,
-            status: isset($payload['status']) ? (string) $payload['status'] : null,
+            transactionId: $transactionId,
+            amount: $this->normalizeAmount($payload),
+            status: $normalizedStatus,
             metadata: $payload,
         );
     }
@@ -121,5 +196,47 @@ class PaytrProvider implements PaymentProviderInterface
     private function mockMode(): bool
     {
         return (bool) config('subscription-guard.providers.drivers.paytr.mock', true);
+    }
+
+    private function webhookHash(array $payload, string $merchantKey, string $merchantSalt): string
+    {
+        $message = (string) ($payload['merchant_oid'] ?? '')
+            .$merchantSalt
+            .(string) ($payload['status'] ?? '')
+            .(string) ($payload['total_amount'] ?? '');
+
+        return base64_encode(hash_hmac('sha256', $message, $merchantKey, true));
+    }
+
+    private function normalizeAmount(array $payload): ?float
+    {
+        if (! isset($payload['total_amount'])) {
+            return null;
+        }
+
+        $raw = (string) $payload['total_amount'];
+
+        if ($raw === '') {
+            return null;
+        }
+
+        if (str_contains($raw, '.')) {
+            return (float) $raw;
+        }
+
+        return ((float) $raw) / 100;
+    }
+
+    private function string(array $payload, string $key): ?string
+    {
+        $value = $payload[$key] ?? null;
+
+        if (! is_scalar($value)) {
+            return null;
+        }
+
+        $string = trim((string) $value);
+
+        return $string === '' ? null : $string;
     }
 }
