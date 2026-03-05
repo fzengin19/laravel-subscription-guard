@@ -140,6 +140,17 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
 - `spatie/laravel-data` v1 kapsam dışıdır
 - DTO validation ingress boundary'de yapılır (request/webhook parse)
 
+### WebhookResult Genişletme (Zorunlu)
+- Mevcut alanlar: `processed`, `eventId`, `duplicate`, `message`
+- Faz 2 tamamlanma için eklenecek alanlar:
+  - `eventType`
+  - `subscriptionId`
+  - `transactionId`
+  - `amount`
+  - `status`
+  - `nextBillingDate`
+- Bu alanlar service orchestration katmanına provider-agnostic veri taşımak için zorunludur
+
 ---
 
 ## IyzicoProvider Sınıfı
@@ -156,7 +167,37 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
 - chargeRecurring(): kullanılmaz (provider-managed)
 - refund(): Cancel/Refund
 - validateWebhook(): Signature check
-- processWebhook(): Event handling
+- processWebhook(): Payload parse + `WebhookResult` DTO üretimi (state mutation yok)
+
+### Provider Adapter Kısıtları (Non-Negotiable)
+- Provider adapter DB state mutate etmez (`Subscription`, `Transaction`, `PaymentMethod`)
+- Provider adapter domain event dispatch etmez
+- Provider adapter sonucu typed DTO ile service katmanına iletir
+
+---
+
+## 3 Katmanlı Mimari Uygulaması (Faz 2 Zorunlu)
+
+Referans: `docs/plans/2026-03-04-manages-own-billing-architecture-design.md`
+
+### Katman 1 - Provider Adapter (iyzico)
+- iyzico request/response ve webhook payload normalizasyonu
+- Signature doğrulama ve callback güvenliği
+- DTO dönüşü (`PaymentResponse`, `SubscriptionResponse`, `WebhookResult`)
+
+### Katman 2 - Service Orchestration
+- `SubscriptionService::handleWebhookResult(...)` state mutation'ın tek noktasıdır
+- `SubscriptionService::handlePaymentResult(...)` ödeme sonucu işleme tek noktasıdır
+- Generic + provider-specific event dispatch sadece bu katmanda yapılır
+
+### Katman 3 - Event Hierarchy
+- Generic eventler `src/Events/` altında üretilir
+- iyzico eventleri provider klasöründe tutulur ve gerekiyorsa generic eventleri extend eder
+- Cross-domain listener'lar generic eventlere bağlanır
+
+### Job Kuralı
+- `FinalizeWebhookEventJob` provider-agnostic olmalıdır
+- Job içinde `if ($provider === 'iyzico')` tarzı domain davranış branching'i bulunamaz
 
 ---
 
@@ -197,17 +238,28 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
 
 ## Events
 
+### Generic Events (`src/Events`)
 | Event | Trigger |
 |-------|---------|
-| IyzicoPaymentInitiated | Ödeme başlatıldı |
-| IyzicoPaymentCompleted | Ödeme başarılı |
-| IyzicoPaymentFailed | Ödeme başarısız |
-| IyzicoSubscriptionCreated | Abonelik oluşturuldu |
-| IyzicoSubscriptionUpgraded | Plan değişti |
-| IyzicoSubscriptionCancelled | Abonelik iptal edildi |
-| IyzicoSubscriptionOrderSucceeded | Renewal tahsilatı başarılı |
-| IyzicoSubscriptionOrderFailed | Renewal tahsilatı başarısız |
-| IyzicoWebhookReceived | Webhook alındı |
+| PaymentCompleted | Ödeme başarılı |
+| PaymentFailed | Ödeme başarısız |
+| SubscriptionCreated | Abonelik oluşturuldu |
+| SubscriptionCancelled | Abonelik iptal edildi |
+| SubscriptionRenewed | Renewal tahsilatı başarılı |
+| SubscriptionRenewalFailed | Renewal tahsilatı başarısız |
+| WebhookReceived | Webhook alındı |
+
+### Provider Events (`src/Payment/Providers/Iyzico/Events`)
+| Event | Trigger |
+|-------|---------|
+| IyzicoPaymentCompleted | iyzico ödeme başarılı (generic event üstüne provider metadata) |
+| IyzicoPaymentFailed | iyzico ödeme başarısız |
+| IyzicoSubscriptionCreated | iyzico abonelik oluşturuldu |
+| IyzicoSubscriptionUpgraded | iyzico plan değişti |
+| IyzicoSubscriptionCancelled | iyzico abonelik iptal edildi |
+| IyzicoSubscriptionOrderSucceeded | iyzico renewal başarılı |
+| IyzicoSubscriptionOrderFailed | iyzico renewal başarısız |
+| IyzicoWebhookReceived | iyzico webhook alındı |
 
 ---
 
@@ -233,8 +285,11 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
 - [ ] IyzicoProvider sınıfı
 - [ ] IyzicoPaymentRequest/Response DTOs
 - [ ] IyzicoWebhookHandler
+- [ ] `WebhookResult` genişletmesi ve service katmanına uygun veri taşıma
 - [ ] iyzico config bölümü
-- [ ] Events ve Listeners
+- [ ] Generic billing eventleri (`src/Events`) + iyzico provider event hiyerarşisi
+- [ ] `SubscriptionService::handleWebhookResult` ve `handlePaymentResult` implementasyonu
+- [ ] `FinalizeWebhookEventJob` provider-agnostic delegasyonu
 - [ ] Unit tests
 - [ ] Integration tests
 
@@ -254,6 +309,9 @@ iyzico PHP SDK entegrasyonu: ödeme akışları, abonelik işlemleri, kart sakla
 - [ ] `subguard:sync-plans` create/update/conflict senaryoları doğrulanıyor
 - [ ] `subguard:reconcile-iyzico-subscriptions` tutarsız state'i düzeltiyor
 - [ ] Callback URL üretimi auto-route ve custom-route modlarında doğru çalışıyor
+- [ ] Provider adapter katmanında doğrudan DB mutation yapılmadığı testle doğrulanıyor
+- [ ] Provider adapter katmanında domain event dispatch yapılmadığı testle doğrulanıyor
+- [ ] `FinalizeWebhookEventJob` içinde provider-specific domain branching olmadığı doğrulanıyor
 
 ---
 

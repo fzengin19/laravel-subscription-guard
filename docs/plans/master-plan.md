@@ -40,6 +40,37 @@ Laravel ekosistemi için ödeme entegrasyonu ve lisans yönetimini bir arada sun
 | **Event-Driven Architecture** | Ödeme, lisans, abonelik olayları için event'ler |
 | **Configuration Over Convention** | Davranış config ile özelleştirilir |
 
+## Cross-Phase Billing Architecture Contract (Zorunlu)
+
+Detay doküman: `docs/plans/2026-03-04-manages-own-billing-architecture-design.md`
+
+Bu sözleşme tüm fazlarda zorunludur ve ihlali faz kapatmayı bloke eder.
+
+### Katman 1: Provider Adapter
+- Provider sınıfları sadece API iletişimi, imza doğrulama ve payload/response parse yapar
+- Provider sınıfları **DB state mutate etmez** (`Subscription`, `Transaction`, `PaymentMethod` vb.)
+- Provider sınıfları **domain event dispatch etmez**
+
+### Katman 2: Billing Orchestration (`SubscriptionService`)
+- State mutation tek noktadan yapılır
+- Idempotency, retry/grace, period update kuralları tek noktadan uygulanır
+- Generic event + provider-specific event dispatch tek noktadan yapılır
+
+### Katman 3: Event Hierarchy
+- Generic eventler `src/Events/` altında provider-bağımsızdır
+- Provider eventleri `src/Payment/Providers/<Provider>/Events/` altında tutulur
+- Provider eventleri gerekiyorsa generic eventleri extend eder
+
+### managesOwnBilling Kuralı
+- `true` (iyzico): provider recurring charge motorunu yürütür, paket webhook sonucunu işler
+- `false` (PayTR): paket recurring charge motorunu yürütür, provider sadece charge API sonucu döndürür
+- Her iki yol da aynı orchestration metodlarında birleşir
+
+### Job Agnostic Kuralı
+- `FinalizeWebhookEventJob` provider-agnostic olmalıdır
+- Job içinde provider'a özel domain if/else zinciri bulunamaz
+- Job sadece validate + parse + service delegation yapar
+
 ---
 
 ## Pre-Implementation Architecture Gates
@@ -104,7 +135,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 - Ödeme akışları (Non-3DS, 3DS, CheckoutForm)
 - Abonelik (recurring) işlemleri
 - Kart saklama (card storage)
-- Webhook handling
+- Webhook parsing + orchestration delegation (DTO-only provider contract)
 - Plan upgrade/downgrade
 
 **Çıktılar**:
@@ -123,7 +154,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 - Card storage (CAPI)
 - Self-managed renewal tahsilat akışı (cron/queue)
 - Dunning retry iş akışı (2/5/7 gün)
-- Webhook/notification handling
+- Webhook parsing + orchestration delegation (DTO-only provider contract)
 - Refund API
 - Marketplace/split payment (v1 dışı, v1.1 backlog)
 
@@ -419,6 +450,11 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 ---
 
 ## Değişiklik Günlüğü
+
+### v2.4 (2026-03-04)
+- Cross-phase billing architecture contract zorunlu hale getirildi
+- `managesOwnBilling` davranışı 3 katmanlı sorumluluk ayrımı ile sabitlendi
+- Faz 2/3 webhook ve event ownership sınırları netleştirildi
 
 ### v2.3 (2026-03-04)
 - Faz 1 (Core Infrastructure) tamamlandı ve phase-1 work-results/risk-notes güncellendi

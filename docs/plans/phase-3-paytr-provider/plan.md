@@ -171,7 +171,36 @@ hash = base64_encode(
 - chargeRecurring(): CAPI Non3D tahsilat
 - refund(): Refund API
 - validateWebhook(): Hash check
-- processWebhook(): Event handling
+- processWebhook(): Payload parse + `WebhookResult` DTO üretimi (state mutation yok)
+
+### Provider Adapter Kısıtları (Non-Negotiable)
+- Provider adapter DB state mutate etmez (`Subscription`, `Transaction`, `PaymentMethod`)
+- Provider adapter domain event dispatch etmez
+- Provider adapter sonucu typed DTO ile service katmanına iletir
+
+---
+
+## 3 Katmanlı Mimari Uygulaması (Faz 3 Zorunlu)
+
+Referans: `docs/plans/2026-03-04-manages-own-billing-architecture-design.md`
+
+### Katman 1 - Provider Adapter (PayTR)
+- iFrame/CAPI API çağrıları, hash doğrulama ve payload parse
+- DTO dönüşü (`PaymentResponse`, `WebhookResult`, `RefundResponse`)
+
+### Katman 2 - Service Orchestration
+- `SubscriptionService::handlePaymentResult(...)` self-managed tahsilat sonucu için tek mutation noktasıdır
+- `SubscriptionService::handleWebhookResult(...)` webhook sonucu için tek mutation noktasıdır
+- Retry/grace/period update ve event dispatch bu katmanda yürür
+
+### Katman 3 - Event Hierarchy
+- Generic eventler `src/Events/` altında üretilir
+- PayTR eventleri provider klasöründe tutulur ve gerekiyorsa generic eventleri extend eder
+- Cross-domain listener'lar generic eventlere bağlanır
+
+### Job Kuralı
+- Webhook finalization ve renewal job'larında provider-specific domain if/else zinciri yasaktır
+- Ortak job'lar provider-agnostic kalır, provider sonucu service'e delegate eder
 
 ---
 
@@ -260,17 +289,32 @@ hash = base64_encode(
 - `spatie/laravel-data` v1 kapsam dışıdır
 - DTO sözleşmesi manuel typed sınıflarla sabitlenir
 
+### WebhookResult Genişletme Uyum Kuralı
+- Faz 2'de genişletilen `WebhookResult` alanları PayTR webhook parse akışında da doldurulmalıdır
+- Minimum alanlar: `eventType`, `subscriptionId`, `transactionId`, `amount`, `status`, `nextBillingDate`
+- Böylece provider-managed ve self-managed akışlar aynı orchestration sözleşmesinde birleşir
+
 ---
 
 ## Events
 
+### Generic Events (`src/Events`)
 | Event | Trigger |
 |-------|---------|
-| PaytrPaymentInitiated | Ödeme başlatıldı |
-| PaytrPaymentCompleted | Ödeme başarılı |
-| PaytrPaymentFailed | Ödeme başarısız |
-| PaytrRefundProcessed | İade yapıldı |
-| PaytrWebhookReceived | Webhook alındı |
+| PaymentCompleted | Ödeme başarılı |
+| PaymentFailed | Ödeme başarısız |
+| SubscriptionRenewed | Renewal tahsilatı başarılı |
+| SubscriptionRenewalFailed | Renewal tahsilatı başarısız |
+| WebhookReceived | Webhook alındı |
+
+### Provider Events (`src/Payment/Providers/PayTR/Events`)
+| Event | Trigger |
+|-------|---------|
+| PaytrPaymentInitiated | PayTR ödeme başlatıldı |
+| PaytrPaymentCompleted | PayTR ödeme başarılı |
+| PaytrPaymentFailed | PayTR ödeme başarısız |
+| PaytrRefundProcessed | PayTR iade yapıldı |
+| PaytrWebhookReceived | PayTR webhook alındı |
 
 ---
 
@@ -280,7 +324,9 @@ hash = base64_encode(
 - [ ] PaytrPaymentRequest/Response DTOs
 - [ ] PaytrWebhookHandler
 - [ ] PayTR config bölümü
-- [ ] Events ve Listeners
+- [ ] Generic billing eventleri (`src/Events`) + PayTR provider event hiyerarşisi
+- [ ] `SubscriptionService::handleWebhookResult` ve `handlePaymentResult` PayTR akışına bağlandı
+- [ ] Ortak job'larda provider-specific domain branching kaldırıldı
 - [ ] Unit tests
 - [ ] Integration tests
 
@@ -304,6 +350,8 @@ hash = base64_encode(
 - [ ] Trial bitmeden renewal charge denenmiyor
 - [ ] `mode=now` upgrade'de lokal proration + anlık charge doğru çalışıyor
 - [ ] Kart güncelleme sonrası past_due abonelikte anında recovery deneniyor
+- [ ] Provider adapter katmanında doğrudan DB mutation yapılmadığı testle doğrulanıyor
+- [ ] Provider adapter katmanında domain event dispatch yapılmadığı testle doğrulanıyor
 
 ---
 

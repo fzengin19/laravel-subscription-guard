@@ -158,6 +158,13 @@ php artisan subguard:simulate-webhook paytr subscription.cancelled
 - [ ] Webhook endpoint verify+queue+200 prensibi
 - [ ] Queue worker single-writer mutasyon prensibi
 
+#### Architecture Conformance (Critical)
+- [ ] Provider adapter katmanlarında doğrudan DB mutation olmadığını doğrulayan test/scan
+- [ ] Provider adapter katmanlarında domain event dispatch olmadığını doğrulayan test/scan
+- [ ] `FinalizeWebhookEventJob` ve ortak job'larda provider-specific domain branching olmadığını doğrulayan test/scan
+- [ ] Generic event katmanı (`src/Events`) üzerinden cross-provider listener uyumluluğu doğrulaması
+- [ ] `managesOwnBilling=true/false` akışlarının aynı service orchestration metodlarında birleştiğini doğrulama
+
 ---
 
 ## Performance Tests
@@ -205,6 +212,12 @@ php artisan subguard:simulate-webhook paytr subscription.cancelled
 - composer audit
 - Static analysis (PHPStan)
 - Dependency check
+
+### Architecture Static Audit
+- Provider klasörlerinde model mutation pattern taraması (`Subscription::`, `Transaction::`, `PaymentMethod::`)
+- Provider klasörlerinde domain `Event::dispatch` kullanım taraması
+- Job sınıflarında provider-specific domain branching pattern taraması
+- Uyum raporu release checklist'ine zorunlu eklenir
 
 ### Penetration Testing
 - Webhook endpoint
@@ -448,6 +461,7 @@ class SendEfaturaOnPayment
 - [ ] Tüm E2E tests geçiyor
 - [ ] Performance hedefleri tutuyor
 - [ ] Security audit temiz
+- [ ] Architecture conformance audit temiz
 - [ ] Dokümantasyon eksiksiz
 - [ ] README ile kurulum çalışıyor
 

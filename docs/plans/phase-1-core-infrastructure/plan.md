@@ -176,6 +176,8 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 - processDunning(date): int
 - processScheduledPlanChanges(date): int
 - retryPastDuePayments(subscribableId): int
+- handleWebhookResult(result, provider): void
+- handlePaymentResult(result, subscription): void
 
 ### BillingProfileInterface
 - getBillingProfile(): BillingProfileData
@@ -219,6 +221,16 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 - Gateway spesifik API çağrılarını yapar
 - İmza doğrulama ve provider response parse eder
 - `createSubscription`/`upgradeSubscription` gateway kapasitesine göre davranır
+
+### Zorunlu Mimari Kısıtlar (Faz 1 Contract)
+- Provider adapter **DB state mutate etmez** (`Subscription`, `Transaction`, `PaymentMethod`)
+- Provider adapter **domain event dispatch etmez**
+- `processWebhook(payload)` sadece normalize DTO (`WebhookResult`) döndürür
+- Domain state değişimleri sadece `SubscriptionService` orchestration katmanında yapılır
+- `FinalizeWebhookEventJob` provider-agnostic kalır, provider-specific domain if/else içermez
+- Generic billing event katmanı (`src/Events`) Faz 2/3 implementasyonunun zorunlu girdisidir
+
+Bu sözleşmenin detay tasarımı: `docs/plans/2026-03-04-manages-own-billing-architecture-design.md`
 
 ### Akış Matrisi
 - Direct charge: Service -> Provider pay -> sync response -> local transaction
@@ -441,3 +453,7 @@ Paketin temel altyapısını oluştur: veritabanı şeması, modeller, interface
 ## Sonraki Faz
 
 Faz 2: iyzico Provider (bu faz tamamlandıktan sonra başlayacak)
+
+### Faz 1 -> Faz 2 Geçiş Kapısı (Retrofit Kuralı)
+- Faz 2 sırasında Faz 1 contract ihlali tespit edilirse (provider mutation/event dispatch gibi), ilgili altyapı düzeltmesi Faz 2 kapanış kriterine dahil edilir
+- "Faz 1 tamam" kararı, bu contract'ın aktif uygulanmasına engel değildir

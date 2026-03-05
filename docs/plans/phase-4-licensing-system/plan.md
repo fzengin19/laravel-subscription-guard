@@ -141,12 +141,15 @@ Lisans key generation, validation, feature gating, subscription bridge, grace pe
 
 ### Event-Listener Pattern
 
+Referans sözleşme: `docs/plans/2026-03-04-manages-own-billing-architecture-design.md`
+
 **Events**:
-- SubscriptionActivated
+- PaymentCompleted
+- PaymentFailed
+- SubscriptionCreated
 - SubscriptionRenewed
-- SubscriptionSuspended
+- SubscriptionRenewalFailed
 - SubscriptionCancelled
-- SubscriptionExpired
 
 **Listeners**:
 - GenerateLicenseForSubscription
@@ -155,9 +158,14 @@ Lisans key generation, validation, feature gating, subscription bridge, grace pe
 - CancelLicense
 - ExpireLicense
 
+### Event Bağımlılık Kuralı
+- Lisans domain'i provider-specific event sınıflarına doğrudan bağımlı olmayacak
+- Cross-provider davranış sadece generic billing event katmanı üzerinden kurulacak
+- Provider'a özel metadata ihtiyacı olursa generic event payload'ı içindeki normalize alanlar kullanılacak
+
 ### Flow
 ```
-Payment Success → SubscriptionActivated 
+PaymentCompleted → SubscriptionCreated/SubscriptionRenewed
   → GenerateLicenseForSubscription 
   → License Created 
   → LicenseGenerated Event
