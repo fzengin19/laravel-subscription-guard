@@ -9,11 +9,13 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
+use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
+use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
 final class PaymentChargeJob implements ShouldQueue
 {
@@ -27,7 +29,7 @@ final class PaymentChargeJob implements ShouldQueue
         $this->onQueue((string) config('subscription-guard.queue.queue', 'subguard-main'));
     }
 
-    public function handle(PaymentManager $paymentManager): void
+    public function handle(PaymentManager $paymentManager, SubscriptionService $subscriptionService): void
     {
         $lock = cache()->lock('subguard:charge:'.$this->transactionId, 30);
 
@@ -36,7 +38,7 @@ final class PaymentChargeJob implements ShouldQueue
         }
 
         try {
-            DB::transaction(function () use ($paymentManager): void {
+            DB::transaction(function () use ($paymentManager, $subscriptionService): void {
                 $transaction = Transaction::query()
                     ->lockForUpdate()
                     ->find($this->transactionId);
@@ -51,20 +53,59 @@ final class PaymentChargeJob implements ShouldQueue
                     return;
                 }
 
+                $subscription = $transaction->subscription()->first();
+
+                if (! $subscription instanceof Subscription) {
+                    return;
+                }
+
+                $provider = (string) $transaction->getAttribute('provider');
+
+                $providerAdapter = $paymentManager->provider($provider);
+
+                $response = $providerAdapter->chargeRecurring([
+                    'subscription_id' => $subscription->getKey(),
+                    'provider_subscription_id' => $subscription->getAttribute('provider_subscription_id'),
+                    'payment_method_id' => $subscription->getAttribute('payment_method_id'),
+                    'metadata' => $subscription->getAttribute('metadata'),
+                ], (float) $transaction->getAttribute('amount'));
+
+                if ($response->success) {
+                    $transaction->setAttribute('status', 'processed');
+                    $transaction->setAttribute('provider_transaction_id', $response->transactionId);
+                    $transaction->setAttribute('failure_reason', null);
+                    $transaction->setAttribute('processed_at', now());
+                    $transaction->setAttribute('provider_response', $response->providerResponse);
+                    $transaction->save();
+
+                    $subscriptionService->handlePaymentResult(new PaymentResponse(
+                        success: true,
+                        transactionId: $response->transactionId,
+                        providerResponse: $response->providerResponse,
+                    ), $subscription);
+
+                    DispatchBillingNotificationsJob::dispatch('payment.completed', [
+                        'transaction_id' => $transaction->getKey(),
+                        'subscription_id' => $subscription->getKey(),
+                        'provider' => $provider,
+                    ])->onQueue($paymentManager->queueName('notifications_queue', 'subguard-notifications'));
+
+                    return;
+                }
+
                 $retryCount = (int) $transaction->getAttribute('retry_count') + 1;
 
                 $transaction->setAttribute('retry_count', $retryCount);
                 $transaction->setAttribute('status', 'failed');
-                $transaction->setAttribute('failure_reason', 'Payment provider adapter is not implemented yet.');
+                $transaction->setAttribute('failure_reason', (string) ($response->failureReason ?? 'Provider recurring charge failed.'));
                 $transaction->setAttribute('last_retry_at', now());
                 $transaction->setAttribute('next_retry_at', $this->nextRetryDate($retryCount));
                 $transaction->setAttribute('processed_at', now());
+                $transaction->setAttribute('provider_response', $response->providerResponse);
                 $transaction->save();
 
-                $subscription = $transaction->subscription()->first();
-
-                if ($subscription instanceof Subscription && in_array((string) $subscription->getAttribute('status'), ['active', 'trialing'], true)) {
-                    $subscription->setAttribute('status', 'past_due');
+                if (in_array((string) $subscription->getAttribute('status'), [SubscriptionStatus::Active->value, 'trialing'], true)) {
+                    $subscription->setAttribute('status', SubscriptionStatus::PastDue->value);
 
                     if ($subscription->getAttribute('grace_ends_at') === null) {
                         $subscription->setAttribute('grace_ends_at', now()->addDays(7));
@@ -73,11 +114,9 @@ final class PaymentChargeJob implements ShouldQueue
                     $subscription->save();
                 }
 
-                $provider = (string) $transaction->getAttribute('provider');
-
                 DispatchBillingNotificationsJob::dispatch('payment.failed', [
                     'transaction_id' => $transaction->getKey(),
-                    'subscription_id' => $subscription?->getKey(),
+                    'subscription_id' => $subscription->getKey(),
                     'provider' => $provider,
                     'retry_count' => $retryCount,
                 ])->onQueue($paymentManager->queueName('notifications_queue', 'subguard-notifications'));
@@ -87,7 +126,7 @@ final class PaymentChargeJob implements ShouldQueue
         }
     }
 
-    private function nextRetryDate(int $retryCount): ?Carbon
+    private function nextRetryDate(int $retryCount): ?\Illuminate\Support\Carbon
     {
         $retryDays = [2, 5, 7];
 

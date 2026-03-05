@@ -23,6 +23,8 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\Commands
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\Commands\SyncPlansCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProviderEventDispatcher;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProviderEventDispatcher;
 use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
 class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
@@ -49,7 +51,9 @@ class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
 
         $this->app->singleton(PaymentManager::class, static fn (): PaymentManager => new PaymentManager);
         $this->app->singleton(IyzicoProvider::class, static fn (): IyzicoProvider => new IyzicoProvider);
+        $this->app->singleton(PaytrProvider::class, static fn (): PaytrProvider => new PaytrProvider);
         $this->app->singleton(IyzicoProviderEventDispatcher::class, static fn (): IyzicoProviderEventDispatcher => new IyzicoProviderEventDispatcher);
+        $this->app->singleton(PaytrProviderEventDispatcher::class, static fn (): PaytrProviderEventDispatcher => new PaytrProviderEventDispatcher);
         $this->app->singleton(ProviderEventDispatcherResolver::class, fn (): ProviderEventDispatcherResolver => new ProviderEventDispatcherResolver($this->app));
         $this->app->singleton(LicenseManager::class, static fn (): LicenseManager => new LicenseManager);
         $this->app->singleton(SubscriptionService::class, fn (): SubscriptionService => new SubscriptionService(
