@@ -22,6 +22,8 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Commands\ProcessMeteredBillingCom
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\ProcessPlanChangesCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\ProcessRenewalsCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\SuspendOverdueCommand;
+use SubscriptionGuard\LaravelSubscriptionGuard\Commands\SyncLicenseHeartbeatsCommand;
+use SubscriptionGuard\LaravelSubscriptionGuard\Commands\SyncLicenseRevocationsCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\FeatureGateInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\LicenseManagerInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\SubscriptionServiceInterface;
@@ -65,6 +67,8 @@ class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
                 SuspendOverdueCommand::class,
                 ProcessMeteredBillingCommand::class,
                 ProcessPlanChangesCommand::class,
+                SyncLicenseRevocationsCommand::class,
+                SyncLicenseHeartbeatsCommand::class,
                 SyncPlansCommand::class,
                 ReconcileIyzicoSubscriptionsCommand::class,
                 GenerateLicenseCommand::class,
@@ -101,7 +105,9 @@ class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
             $this->app->make(ScheduleGate::class),
         ));
         $this->app->singleton(SeatManager::class, static fn (): SeatManager => new SeatManager);
-        $this->app->singleton(MeteredBillingProcessor::class, static fn (): MeteredBillingProcessor => new MeteredBillingProcessor);
+        $this->app->singleton(MeteredBillingProcessor::class, fn (): MeteredBillingProcessor => new MeteredBillingProcessor(
+            $this->app->make(PaymentManager::class)
+        ));
         $this->app->singleton(LicenseManagerInterface::class, LicenseManager::class);
         $this->app->singleton(SubscriptionServiceInterface::class, SubscriptionService::class);
         $this->app->singleton(FeatureGateInterface::class, FeatureGate::class);

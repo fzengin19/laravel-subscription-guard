@@ -52,6 +52,8 @@ return [
         'reconcile_iyzico_command' => 'subguard:reconcile-iyzico-subscriptions',
         'generate_license_command' => 'subguard:generate-license',
         'check_license_command' => 'subguard:check-license',
+        'sync_license_revocations_command' => 'subguard:sync-license-revocations',
+        'sync_license_heartbeats_command' => 'subguard:sync-license-heartbeats',
     ],
 
     'logging' => [
@@ -80,6 +82,9 @@ return [
             'cache_key' => env('SUBGUARD_LICENSE_REVOCATION_CACHE_KEY', 'subguard:license:revocation'),
             'snapshot_ttl_seconds' => (int) env('SUBGUARD_LICENSE_REVOCATION_SNAPSHOT_TTL_SECONDS', 604800),
             'fail_open_on_expired' => (bool) env('SUBGUARD_LICENSE_REVOCATION_FAIL_OPEN_ON_EXPIRED', true),
+            'sync_endpoint' => env('SUBGUARD_LICENSE_REVOCATION_SYNC_ENDPOINT', ''),
+            'sync_token' => env('SUBGUARD_LICENSE_REVOCATION_SYNC_TOKEN', ''),
+            'sync_timeout_seconds' => (int) env('SUBGUARD_LICENSE_REVOCATION_SYNC_TIMEOUT_SECONDS', 10),
         ],
         'events' => [
             'emit_feature_checked' => false,
