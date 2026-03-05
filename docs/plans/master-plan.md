@@ -1,8 +1,8 @@
 # Laravel Subscription Guard - Master Plan
 
-> **Versiyon**: 2.9 (Yol Haritası)
+> **Versiyon**: 3.0 (Yol Haritası)
 > **Tarih**: 2026-03-03
-> **Durum**: Execution in Progress (Faz 1-5 tamamlandı)
+> **Durum**: Execution in Progress (Faz 1-5 tamamlandı, Faz 6 planlandı)
 
 ---
 
@@ -223,6 +223,24 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 - Integration tests
 - Dokümantasyon (TR/EN)
 - README ve CHANGELOG
+
+---
+
+### Faz 6: Security Hardening & Debug Reliability (3 Hafta)
+**Detaylı Plan**: `phase-6-security-hardening/plan.md`
+**Durum**: Planlama (2026-03-05)
+
+**Kapsam**:
+- License limit middleware TOCTOU risk kapanışı
+- Model bazlı mass assignment güvenlik sertleştirmesi
+- Webhook/callback idempotency fallback strateji iyileştirmesi
+- Concurrency ve duplicate/retry regression test stratejisi
+- Güvenlik audit raporları ile bulgu mutabakatının güncellenmesi
+
+**Çıktılar**:
+- Faz 6 güvenlik hardening plan dokümanı
+- Faz 6 work-results ve risk-notes şablonları
+- Güncellenmiş güvenlik kapanış kabul kriterleri
 
 ---
 
@@ -469,6 +487,11 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 ---
 
 ## Değişiklik Günlüğü
+
+### v3.0 (2026-03-05)
+- Faz 6 (Security Hardening & Debug Reliability) roadmap'e eklendi
+- `phase-6-security-hardening/plan.md` oluşturuldu
+- Faz 6 için zorunlu doküman seti (`work-results.md`, `risk-notes.md`) eklendi
 
 ### v2.9 (2026-03-05)
 - Faz 5 integration and testing kapanisi tamamlandi
