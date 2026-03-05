@@ -113,7 +113,7 @@ it('generates and validates license via CLI commands', function (): void {
 it('manages seats and synchronizes license limits', function (): void {
     [$plan, $userId] = createPhaseFourOperationalPlanAndUser();
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase4.operations.'.bin2hex(random_bytes(6)),
@@ -121,9 +121,9 @@ it('manages seats and synchronizes license limits', function (): void {
         'limit_overrides' => ['seats' => 1],
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -136,7 +136,7 @@ it('manages seats and synchronizes license limits', function (): void {
         'amount' => 50,
         'currency' => 'TRY',
         'next_billing_date' => now()->addMonth(),
-    ]);
+    ]));
 
     SubscriptionItem::query()->create([
         'subscription_id' => $subscription->getKey(),
@@ -159,16 +159,16 @@ it('manages seats and synchronizes license limits', function (): void {
 it('processes metered billing and resets period usage', function (): void {
     [$plan, $userId] = createPhaseFourOperationalPlanAndUser();
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase4.metered.'.bin2hex(random_bytes(6)),
         'status' => 'active',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -182,7 +182,7 @@ it('processes metered billing and resets period usage', function (): void {
         'currency' => 'TRY',
         'metadata' => ['metered_price_per_unit' => 2.5],
         'next_billing_date' => now()->subHour(),
-    ]);
+    ]));
 
     LicenseUsage::query()->create([
         'license_id' => $license->getKey(),
@@ -212,16 +212,16 @@ it('processes metered billing through provider charge in self-managed flow', fun
 
     [$plan, $userId] = createPhaseFourOperationalPlanAndUser();
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase4.metered.provider.'.bin2hex(random_bytes(6)),
         'status' => 'active',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -238,7 +238,7 @@ it('processes metered billing through provider charge in self-managed flow', fun
             'card_token' => 'ct_metered_001',
         ],
         'next_billing_date' => now()->subHour(),
-    ]);
+    ]));
 
     LicenseUsage::query()->create([
         'license_id' => $license->getKey(),
@@ -276,16 +276,16 @@ it('keeps usage and marks transaction failed when metered provider charge fails'
     $periodStart = now()->startOfMonth();
     $periodEnd = now()->endOfMonth();
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase4.metered.fail.'.bin2hex(random_bytes(6)),
         'status' => 'active',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -304,7 +304,7 @@ it('keeps usage and marks transaction failed when metered provider charge fails'
         'current_period_start' => $periodStart,
         'current_period_end' => $periodEnd,
         'next_billing_date' => now()->subHour(),
-    ]);
+    ]));
 
     LicenseUsage::query()->create([
         'license_id' => $license->getKey(),
@@ -338,16 +338,16 @@ it('keeps usage and marks transaction failed when metered provider charge fails'
 it('keeps metered billing idempotent on repeated command execution for same period', function (): void {
     [$plan, $userId] = createPhaseFourOperationalPlanAndUser();
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase4.metered.idempotent.'.bin2hex(random_bytes(6)),
         'status' => 'active',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -361,7 +361,7 @@ it('keeps metered billing idempotent on repeated command execution for same peri
         'currency' => 'TRY',
         'metadata' => ['metered_price_per_unit' => 1.5],
         'next_billing_date' => now()->subHour(),
-    ]);
+    ]));
 
     LicenseUsage::query()->create([
         'license_id' => $license->getKey(),
@@ -390,7 +390,7 @@ it('returns scheduled availability for a feature through feature manager', funct
 
     $until = now()->addDay()->startOfMinute();
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase4.schedule.'.bin2hex(random_bytes(6)),
@@ -403,7 +403,7 @@ it('returns scheduled availability for a feature through feature manager', funct
         ],
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now(),
-    ]);
+    ]));
 
     $featureManager = app(FeatureManager::class);
 

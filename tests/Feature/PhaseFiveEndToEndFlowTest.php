@@ -32,16 +32,16 @@ it('processes paytr success webhook end-to-end and updates transaction plus lice
         'is_active' => true,
     ]);
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase5.e2e.'.bin2hex(random_bytes(6)),
         'status' => 'past_due',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now()->subDay(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -54,7 +54,7 @@ it('processes paytr success webhook end-to-end and updates transaction plus lice
         'amount' => 100,
         'currency' => 'TRY',
         'next_billing_date' => now()->subHour(),
-    ]);
+    ]));
 
     $payload = [
         'event_id' => 'phase5_paytr_evt_'.bin2hex(random_bytes(4)),
@@ -102,16 +102,16 @@ it('processes iyzico cancellation webhook end-to-end and cancels subscription pl
         'is_active' => true,
     ]);
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase5.e2e.cancel.'.bin2hex(random_bytes(6)),
         'status' => 'active',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -124,7 +124,7 @@ it('processes iyzico cancellation webhook end-to-end and cancels subscription pl
         'amount' => 70,
         'currency' => 'TRY',
         'next_billing_date' => now()->addMonth(),
-    ]);
+    ]));
 
     $payload = [
         'id' => 'phase5_iyz_evt_'.bin2hex(random_bytes(4)),
@@ -165,16 +165,16 @@ it('treats duplicate paytr webhook event id as no-op for transaction duplication
         'is_active' => true,
     ]);
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase5.e2e.dup.'.bin2hex(random_bytes(6)),
         'status' => 'past_due',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now()->subDay(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -187,7 +187,7 @@ it('treats duplicate paytr webhook event id as no-op for transaction duplication
         'amount' => 100,
         'currency' => 'TRY',
         'next_billing_date' => now()->subHour(),
-    ]);
+    ]));
 
     $eventId = 'phase5_paytr_dup_evt_'.bin2hex(random_bytes(4));
 

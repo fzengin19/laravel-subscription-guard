@@ -49,7 +49,7 @@ it('dispatches renewal candidates only for due self-managed subscriptions', func
         'billing_interval' => 1,
     ]);
 
-    $eligible = Subscription::query()->create([
+    $eligible = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -58,9 +58,9 @@ it('dispatches renewal candidates only for due self-managed subscriptions', func
         'next_billing_date' => $date->copy()->subMinute(),
         'amount' => 99,
         'currency' => 'TRY',
-    ]);
+    ]));
 
-    Subscription::query()->create([
+    Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -69,9 +69,9 @@ it('dispatches renewal candidates only for due self-managed subscriptions', func
         'next_billing_date' => $date->copy()->subMinute(),
         'amount' => 99,
         'currency' => 'TRY',
-    ]);
+    ]));
 
-    Subscription::query()->create([
+    Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -80,7 +80,7 @@ it('dispatches renewal candidates only for due self-managed subscriptions', func
         'next_billing_date' => $date->copy()->subMinute(),
         'amount' => 99,
         'currency' => 'TRY',
-    ]);
+    ]));
 
     $processed = app(SubscriptionServiceInterface::class)->processRenewals($date);
 
@@ -103,7 +103,7 @@ it('dispatches dunning retry jobs for due failed transactions', function (): voi
         'updated_at' => now(),
     ]);
 
-    $transaction = Transaction::query()->create([
+    $transaction = Transaction::unguarded(static fn () => Transaction::query()->create([
         'payable_type' => 'App\\Models\\User',
         'payable_id' => $userId,
         'status' => 'failed',
@@ -113,9 +113,9 @@ it('dispatches dunning retry jobs for due failed transactions', function (): voi
         'retry_count' => 1,
         'next_retry_at' => $date->copy()->subMinute(),
         'idempotency_key' => 'txn-dunning-1',
-    ]);
+    ]));
 
-    Transaction::query()->create([
+    Transaction::unguarded(static fn () => Transaction::query()->create([
         'payable_type' => 'App\\Models\\User',
         'payable_id' => $userId,
         'status' => 'failed',
@@ -125,7 +125,7 @@ it('dispatches dunning retry jobs for due failed transactions', function (): voi
         'retry_count' => 3,
         'next_retry_at' => $date->copy()->subMinute(),
         'idempotency_key' => 'txn-dunning-2',
-    ]);
+    ]));
 
     $processed = app(SubscriptionServiceInterface::class)->processDunning($date);
 
@@ -172,7 +172,7 @@ it('dispatches scheduled plan change jobs for due pending changes', function ():
         'billing_interval' => 1,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $fromPlan->getKey(),
@@ -181,7 +181,7 @@ it('dispatches scheduled plan change jobs for due pending changes', function ():
         'next_billing_date' => $date->copy()->addDay(),
         'amount' => 129,
         'currency' => 'TRY',
-    ]);
+    ]));
 
     $planChange = ScheduledPlanChange::query()->create([
         'subscription_id' => $subscription->getKey(),
@@ -228,14 +228,14 @@ it('suspends overdue subscriptions and linked license with command', function ()
         'billing_interval' => 1,
     ]);
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'LIC-SUSPEND-001',
         'status' => 'active',
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -245,7 +245,7 @@ it('suspends overdue subscriptions and linked license with command', function ()
         'grace_ends_at' => $date->copy()->subMinute(),
         'amount' => 79,
         'currency' => 'TRY',
-    ]);
+    ]));
 
     $exitCode = Artisan::call('subguard:suspend-overdue', ['--date' => $date->toDateTimeString()]);
 

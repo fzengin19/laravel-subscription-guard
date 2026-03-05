@@ -33,16 +33,16 @@ it('handles paytr webhook batch with acceptable average latency', function (): v
         'is_active' => true,
     ]);
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.phase5.perf.'.bin2hex(random_bytes(6)),
         'status' => 'active',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -55,7 +55,7 @@ it('handles paytr webhook batch with acceptable average latency', function (): v
         'amount' => 100,
         'currency' => 'TRY',
         'next_billing_date' => now()->subHour(),
-    ]);
+    ]));
 
     $count = 25;
     $start = microtime(true);

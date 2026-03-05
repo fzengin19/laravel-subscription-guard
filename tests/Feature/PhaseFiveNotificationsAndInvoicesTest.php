@@ -37,7 +37,7 @@ it('dispatches invoice paid notification and creates invoice on payment.complete
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => PhaseFiveNotifiableUser::class,
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -49,9 +49,9 @@ it('dispatches invoice paid notification and creates invoice on payment.complete
         'amount' => 120,
         'currency' => 'TRY',
         'next_billing_date' => now()->addMonth(),
-    ]);
+    ]));
 
-    $transaction = Transaction::query()->create([
+    $transaction = Transaction::unguarded(static fn () => Transaction::query()->create([
         'subscription_id' => $subscription->getKey(),
         'payable_type' => PhaseFiveNotifiableUser::class,
         'payable_id' => $userId,
@@ -63,7 +63,7 @@ it('dispatches invoice paid notification and creates invoice on payment.complete
         'currency' => 'TRY',
         'processed_at' => now(),
         'idempotency_key' => 'phase5:invoice:'.bin2hex(random_bytes(4)),
-    ]);
+    ]));
 
     (new DispatchBillingNotificationsJob('payment.completed', [
         'transaction_id' => $transaction->getKey(),
@@ -104,7 +104,7 @@ it('dispatches cancellation notification for subscription.cancelled event', func
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => PhaseFiveNotifiableUser::class,
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -117,7 +117,7 @@ it('dispatches cancellation notification for subscription.cancelled event', func
         'currency' => 'TRY',
         'cancelled_at' => now(),
         'next_billing_date' => null,
-    ]);
+    ]));
 
     (new DispatchBillingNotificationsJob('subscription.cancelled', [
         'subscription_id' => $subscription->getKey(),

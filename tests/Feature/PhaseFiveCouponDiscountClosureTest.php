@@ -31,7 +31,7 @@ it('rejects coupon when min purchase amount is not met', function (): void {
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -43,7 +43,7 @@ it('rejects coupon when min purchase amount is not met', function (): void {
         'amount' => 40,
         'currency' => 'TRY',
         'next_billing_date' => now()->subMinute(),
-    ]);
+    ]));
 
     Coupon::query()->create([
         'code' => 'PHASE5MIN',
@@ -84,7 +84,7 @@ it('enforces coupon max uses and increments current uses on apply', function ():
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -96,7 +96,7 @@ it('enforces coupon max uses and increments current uses on apply', function ():
         'amount' => 80,
         'currency' => 'TRY',
         'next_billing_date' => now()->subMinute(),
-    ]);
+    ]));
 
     $coupon = Coupon::query()->create([
         'code' => 'PHASE5MAX',
@@ -141,7 +141,7 @@ it('applies active discount to renewal transaction and links coupon/discount ids
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -153,7 +153,7 @@ it('applies active discount to renewal transaction and links coupon/discount ids
         'amount' => 100,
         'currency' => 'TRY',
         'next_billing_date' => now()->subMinute(),
-    ]);
+    ]));
 
     Coupon::query()->create([
         'code' => 'PHASE5TXN',
@@ -219,7 +219,7 @@ it('supports repeating discount duration with cycle limit', function (): void {
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -231,7 +231,7 @@ it('supports repeating discount duration with cycle limit', function (): void {
         'amount' => 120,
         'currency' => 'TRY',
         'next_billing_date' => now()->subMinute(),
-    ]);
+    ]));
 
     Coupon::query()->create([
         'code' => 'PHASE5REP',

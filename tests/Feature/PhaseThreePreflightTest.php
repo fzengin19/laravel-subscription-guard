@@ -50,7 +50,7 @@ it('charges pending transaction through provider and records success', function 
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -62,9 +62,9 @@ it('charges pending transaction through provider and records success', function 
         'amount' => 199.00,
         'currency' => 'TRY',
         'next_billing_date' => now(),
-    ]);
+    ]));
 
-    $transaction = Transaction::query()->create([
+    $transaction = Transaction::unguarded(static fn () => Transaction::query()->create([
         'subscription_id' => $subscription->getKey(),
         'payable_type' => 'App\\Models\\User',
         'payable_id' => $userId,
@@ -74,7 +74,7 @@ it('charges pending transaction through provider and records success', function 
         'amount' => 199.00,
         'currency' => 'TRY',
         'idempotency_key' => 'phase3:charge:pending:001',
-    ]);
+    ]));
 
     TestSuccessChargeProvider::$lastIdempotencyKey = null;
 
@@ -112,7 +112,7 @@ it('marks subscription past_due and schedules retry when recurring charge fails'
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -124,9 +124,9 @@ it('marks subscription past_due and schedules retry when recurring charge fails'
         'amount' => 99.00,
         'currency' => 'TRY',
         'next_billing_date' => now(),
-    ]);
+    ]));
 
-    $transaction = Transaction::query()->create([
+    $transaction = Transaction::unguarded(static fn () => Transaction::query()->create([
         'subscription_id' => $subscription->getKey(),
         'payable_type' => 'App\\Models\\User',
         'payable_id' => $userId,
@@ -137,7 +137,7 @@ it('marks subscription past_due and schedules retry when recurring charge fails'
         'currency' => 'TRY',
         'retry_count' => 0,
         'idempotency_key' => 'phase3:charge:pending:002',
-    ]);
+    ]));
 
     (new PaymentChargeJob($transaction->getKey()))->handle(
         app(PaymentManager::class),
@@ -175,7 +175,7 @@ it('marks hard decline as terminal failure without scheduling next retry', funct
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -187,9 +187,9 @@ it('marks hard decline as terminal failure without scheduling next retry', funct
         'amount' => 109.00,
         'currency' => 'TRY',
         'next_billing_date' => now(),
-    ]);
+    ]));
 
-    $transaction = Transaction::query()->create([
+    $transaction = Transaction::unguarded(static fn () => Transaction::query()->create([
         'subscription_id' => $subscription->getKey(),
         'payable_type' => 'App\\Models\\User',
         'payable_id' => $userId,
@@ -200,7 +200,7 @@ it('marks hard decline as terminal failure without scheduling next retry', funct
         'currency' => 'TRY',
         'retry_count' => 0,
         'idempotency_key' => 'phase3:charge:hard-decline:001',
-    ]);
+    ]));
 
     (new PaymentChargeJob($transaction->getKey()))->handle(
         app(PaymentManager::class),
@@ -238,7 +238,7 @@ it('dispatches paytr provider events through subscription service webhook orches
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -250,7 +250,7 @@ it('dispatches paytr provider events through subscription service webhook orches
         'amount' => 79.00,
         'currency' => 'TRY',
         'next_billing_date' => now(),
-    ]);
+    ]));
 
     app(SubscriptionService::class)->handleWebhookResult(new WebhookResult(
         processed: true,
@@ -292,7 +292,7 @@ it('marks pending renewal transactions as failed when subscription is soft delet
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -304,9 +304,9 @@ it('marks pending renewal transactions as failed when subscription is soft delet
         'amount' => 129.00,
         'currency' => 'TRY',
         'next_billing_date' => now()->subDay(),
-    ]);
+    ]));
 
-    $transaction = Transaction::query()->create([
+    $transaction = Transaction::unguarded(static fn () => Transaction::query()->create([
         'subscription_id' => $subscription->getKey(),
         'payable_type' => 'App\\Models\\User',
         'payable_id' => $userId,
@@ -317,7 +317,7 @@ it('marks pending renewal transactions as failed when subscription is soft delet
         'currency' => 'TRY',
         'retry_count' => 0,
         'idempotency_key' => 'phase3:soft-delete:renewal:001',
-    ]);
+    ]));
 
     $subscription->delete();
 

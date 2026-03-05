@@ -30,16 +30,16 @@ it('updates linked license status from generic billing events', function (): voi
         'is_active' => true,
     ]);
 
-    $license = License::query()->create([
+    $license = License::unguarded(static fn () => License::query()->create([
         'user_id' => $userId,
         'plan_id' => $plan->getKey(),
         'key' => 'SG.listener.license',
         'status' => 'active',
         'expires_at' => now()->addMonth(),
         'heartbeat_at' => now()->subDay(),
-    ]);
+    ]));
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -52,7 +52,7 @@ it('updates linked license status from generic billing events', function (): voi
         'amount' => 15.00,
         'currency' => 'TRY',
         'next_billing_date' => now()->addMonth(),
-    ]);
+    ]));
 
     event(new PaymentFailed('paytr', $subscription->getKey(), 15.00));
     expect((string) $license->fresh()->getAttribute('status'))->toBe('past_due');
@@ -92,7 +92,7 @@ it('creates and links a license when subscription created event is received', fu
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -105,7 +105,7 @@ it('creates and links a license when subscription created event is received', fu
         'amount' => 19.00,
         'currency' => 'TRY',
         'next_billing_date' => now()->addMonth(),
-    ]);
+    ]));
 
     event(new SubscriptionCreated('paytr', 'sub_bridge_'.$suffix, (int) $subscription->getKey()));
 
