@@ -10,6 +10,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Data\SubscriptionResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\WebhookReceived;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\PaymentChargeJob;
+use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessRenewalCandidateJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
@@ -75,6 +76,8 @@ it('charges pending transaction through provider and records success', function 
         'idempotency_key' => 'phase3:charge:pending:001',
     ]);
 
+    TestSuccessChargeProvider::$lastIdempotencyKey = null;
+
     (new PaymentChargeJob($transaction->getKey()))->handle(
         app(PaymentManager::class),
         app(SubscriptionService::class)
@@ -82,6 +85,7 @@ it('charges pending transaction through provider and records success', function 
 
     expect((string) $transaction->fresh()?->getAttribute('status'))->toBe('processed');
     expect((string) $subscription->fresh()?->getAttribute('status'))->toBe('active');
+    expect(TestSuccessChargeProvider::$lastIdempotencyKey)->toBe((string) $transaction->getKey());
 });
 
 it('marks subscription past_due and schedules retry when recurring charge fails', function (): void {
@@ -198,10 +202,74 @@ it('dispatches paytr provider events through subscription service webhook orches
     Event::assertDispatched(PaytrPaymentCompleted::class);
 });
 
+it('marks pending renewal transactions as failed when subscription is soft deleted', function (): void {
+    config([
+        'subscription-guard.providers.drivers.paytr.class' => TestSuccessChargeProvider::class,
+        'subscription-guard.providers.drivers.paytr.manages_own_billing' => false,
+    ]);
+
+    $userId = (int) DB::table('users')->insertGetId([
+        'name' => 'Phase3 Soft Delete User',
+        'email' => 'phase3-soft-delete-user@example.test',
+        'password' => 'secret',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $plan = Plan::query()->create([
+        'name' => 'Phase3 Soft Delete Plan',
+        'slug' => 'phase3-soft-delete-plan',
+        'price' => 129.00,
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'is_active' => true,
+    ]);
+
+    $subscription = Subscription::query()->create([
+        'subscribable_type' => 'App\\Models\\User',
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->getKey(),
+        'provider' => 'paytr',
+        'provider_subscription_id' => 'paytr_sub_soft_delete_001',
+        'status' => 'active',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'amount' => 129.00,
+        'currency' => 'TRY',
+        'next_billing_date' => now()->subDay(),
+    ]);
+
+    $transaction = Transaction::query()->create([
+        'subscription_id' => $subscription->getKey(),
+        'payable_type' => 'App\\Models\\User',
+        'payable_id' => $userId,
+        'provider' => 'paytr',
+        'type' => 'renewal',
+        'status' => 'pending',
+        'amount' => 129.00,
+        'currency' => 'TRY',
+        'retry_count' => 0,
+        'idempotency_key' => 'phase3:soft-delete:renewal:001',
+    ]);
+
+    $subscription->delete();
+
+    (new ProcessRenewalCandidateJob($subscription->getKey()))->handle(app(PaymentManager::class));
+
+    expect((string) $transaction->fresh()?->getAttribute('status'))->toBe('failed');
+    expect((string) $transaction->fresh()?->getAttribute('failure_reason'))->toBe('Subscription is deleted; renewal skipped.');
+    expect($transaction->fresh()?->getAttribute('processed_at'))->not->toBeNull();
+});
+
 final class TestSuccessChargeProvider extends PaytrProvider
 {
-    public function chargeRecurring(array $subscription, int|float|string $amount): PaymentResponse
+    public static ?string $lastIdempotencyKey = null;
+
+    public function chargeRecurring(array $subscription, int|float|string $amount, ?string $idempotencyKey = null): PaymentResponse
     {
+        self::$lastIdempotencyKey = $idempotencyKey;
+
         return new PaymentResponse(
             success: true,
             transactionId: 'paytr_txn_success_001',
@@ -247,7 +315,7 @@ final class TestSuccessChargeProvider extends PaytrProvider
 
 final class TestFailureChargeProvider extends PaytrProvider
 {
-    public function chargeRecurring(array $subscription, int|float|string $amount): PaymentResponse
+    public function chargeRecurring(array $subscription, int|float|string $amount, ?string $idempotencyKey = null): PaymentResponse
     {
         return new PaymentResponse(
             success: false,

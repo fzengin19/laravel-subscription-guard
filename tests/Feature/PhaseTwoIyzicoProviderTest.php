@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Http\Request;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -202,6 +203,7 @@ it('falls back to metadata reconciliation when remote mode is requested in mock 
 
 it('finalizes iyzico order success webhooks through provider adapter', function (): void {
     Event::fake([WebhookReceived::class, SubscriptionRenewed::class]);
+    config()->set('app.timezone', 'UTC');
 
     $userId = (int) DB::table('users')->insertGetId([
         'name' => 'Iyzico User',
@@ -241,6 +243,7 @@ it('finalizes iyzico order success webhooks through provider adapter', function 
         'subscription_id' => 'iyz_sub_phase2_001',
         'payment_id' => 'pay_phase2_001',
         'paid_price' => 299.90,
+        'nextPaymentDate' => '2026-03-29 00:30:00',
     ];
 
     $webhookCall = WebhookCall::query()->create([
@@ -257,6 +260,12 @@ it('finalizes iyzico order success webhooks through provider adapter', function 
     $job->handle(app(PaymentManager::class));
 
     expect((string) $subscription->fresh()?->getAttribute('status'))->toBe('active');
+    expect($subscription->fresh()?->getAttribute('next_billing_date')?->format('Y-m-d H:i:s'))
+        ->toBe(
+            Carbon::parse('2026-03-29 00:30:00', 'Europe/Istanbul')
+                ->setTimezone('UTC')
+                ->format('Y-m-d H:i:s')
+        );
     expect((string) $webhookCall->fresh()?->getAttribute('status'))->toBe('processed');
 
     $transaction = Transaction::query()->where('idempotency_key', 'iyzico:webhook:evt_phase2_success_001')->first();

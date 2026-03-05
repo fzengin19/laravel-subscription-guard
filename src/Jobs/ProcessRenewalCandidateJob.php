@@ -38,10 +38,26 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
         try {
             DB::transaction(function () use ($paymentManager): void {
                 $subscription = Subscription::query()
+                    ->withTrashed()
                     ->lockForUpdate()
                     ->find($this->subscriptionId);
 
                 if (! $subscription instanceof Subscription) {
+                    return;
+                }
+
+                if ($subscription->trashed()) {
+                    Transaction::query()
+                        ->where('subscription_id', $subscription->getKey())
+                        ->where('type', 'renewal')
+                        ->whereIn('status', ['pending', 'retrying'])
+                        ->update([
+                            'status' => 'failed',
+                            'failure_reason' => 'Subscription is deleted; renewal skipped.',
+                            'processed_at' => now(),
+                            'next_retry_at' => null,
+                        ]);
+
                     return;
                 }
 

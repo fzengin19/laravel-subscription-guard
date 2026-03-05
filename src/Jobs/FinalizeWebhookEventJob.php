@@ -34,6 +34,8 @@ final class FinalizeWebhookEventJob implements ShouldQueue
         $lock = cache()->lock('subguard:webhook:'.$this->webhookCallId, 30);
 
         if (! $lock->get()) {
+            $this->release(5);
+
             return;
         }
 
@@ -49,7 +51,7 @@ final class FinalizeWebhookEventJob implements ShouldQueue
 
                 $status = (string) $webhookCall->getAttribute('status');
 
-                if (in_array($status, ['processed', 'failed'], true)) {
+                if ($status === 'processed') {
                     return;
                 }
 

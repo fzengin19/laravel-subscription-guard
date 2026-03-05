@@ -199,7 +199,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
     public function processRenewals(DateTimeInterface $date): int
     {
         $count = 0;
-        $formattedDate = Carbon::parse($date->format('Y-m-d H:i:s'));
+        $formattedDate = Carbon::instance($date)->setTimezone($this->billingTimezone());
 
         $subscriptions = Subscription::query()
             ->where('next_billing_date', '<=', $formattedDate)
@@ -223,7 +223,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
     public function processDunning(DateTimeInterface $date): int
     {
         $count = 0;
-        $formattedDate = Carbon::parse($date->format('Y-m-d H:i:s'));
+        $formattedDate = Carbon::instance($date)->setTimezone($this->billingTimezone());
 
         $transactions = Transaction::query()
             ->whereIn('status', ['failed', 'retrying'])
@@ -245,7 +245,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
     public function processScheduledPlanChanges(DateTimeInterface $date): int
     {
         $count = 0;
-        $formattedDate = Carbon::parse($date->format('Y-m-d H:i:s'));
+        $formattedDate = Carbon::instance($date)->setTimezone($this->billingTimezone());
 
         $changes = ScheduledPlanChange::query()
             ->where('status', SubscriptionStatus::Pending->value)
@@ -539,7 +539,11 @@ final class SubscriptionService implements SubscriptionServiceInterface
             $subscription->setAttribute('grace_ends_at', null);
 
             if ($result->nextBillingDate !== null && $result->nextBillingDate !== '') {
-                $subscription->setAttribute('next_billing_date', Carbon::parse($result->nextBillingDate));
+                $subscription->setAttribute(
+                    'next_billing_date',
+                    Carbon::parse($result->nextBillingDate, $this->billingTimezone())
+                        ->setTimezone((string) config('app.timezone', 'UTC'))
+                );
             } else {
                 $nextBillingDate = $subscription->getAttribute('next_billing_date');
 
@@ -585,5 +589,10 @@ final class SubscriptionService implements SubscriptionServiceInterface
             'reason' => $result->message,
             'metadata' => $result->metadata,
         ]);
+    }
+
+    private function billingTimezone(): string
+    {
+        return (string) config('subscription-guard.billing.timezone', 'Europe/Istanbul');
     }
 }

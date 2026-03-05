@@ -285,7 +285,7 @@ final class IyzicoProvider implements PaymentProviderInterface
         return new SubscriptionResponse(true, $subscriptionId, SubscriptionStatus::Active->value, ['new_plan_id' => $newPlanId, 'mode' => $mode]);
     }
 
-    public function chargeRecurring(array $subscription, int|float|string $amount): PaymentResponse
+    public function chargeRecurring(array $subscription, int|float|string $amount, ?string $idempotencyKey = null): PaymentResponse
     {
         throw new UnsupportedProviderOperationException('iyzico manages recurring charges provider-side; local recurring charge is not supported.');
     }

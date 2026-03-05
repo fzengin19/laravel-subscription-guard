@@ -53,12 +53,22 @@ final class ProcessScheduledPlanChangeJob implements ShouldQueue
                 $toPlanId = (int) $change->getAttribute('to_plan_id');
 
                 $subscription = Subscription::query()
+                    ->withTrashed()
                     ->lockForUpdate()
                     ->find($subscriptionId);
 
                 if (! $subscription instanceof Subscription) {
                     $change->setAttribute('status', 'failed');
                     $change->setAttribute('error_message', 'Subscription not found for scheduled plan change.');
+                    $change->setAttribute('processed_at', now());
+                    $change->save();
+
+                    return;
+                }
+
+                if ($subscription->trashed()) {
+                    $change->setAttribute('status', 'failed');
+                    $change->setAttribute('error_message', 'Subscription is deleted for scheduled plan change.');
                     $change->setAttribute('processed_at', now());
                     $change->save();
 

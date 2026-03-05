@@ -38,7 +38,20 @@ final class PaymentChargeJob implements ShouldQueue
         }
 
         try {
-            DB::transaction(function () use ($paymentManager, $subscriptionService): void {
+            $preparedCharge = $this->prepareChargePayload();
+
+            if ($preparedCharge === null) {
+                return;
+            }
+
+            $providerAdapter = $paymentManager->provider($preparedCharge['provider']);
+            $response = $providerAdapter->chargeRecurring(
+                $preparedCharge['charge_payload'],
+                $preparedCharge['amount'],
+                $preparedCharge['idempotency_key']
+            );
+
+            DB::transaction(function () use ($paymentManager, $subscriptionService, $response): void {
                 $transaction = Transaction::query()
                     ->lockForUpdate()
                     ->find($this->transactionId);
@@ -53,22 +66,13 @@ final class PaymentChargeJob implements ShouldQueue
                     return;
                 }
 
-                $subscription = $transaction->subscription()->first();
+                $subscription = Subscription::query()->withTrashed()->find($transaction->getAttribute('subscription_id'));
 
                 if (! $subscription instanceof Subscription) {
                     return;
                 }
 
                 $provider = (string) $transaction->getAttribute('provider');
-
-                $providerAdapter = $paymentManager->provider($provider);
-
-                $response = $providerAdapter->chargeRecurring([
-                    'subscription_id' => $subscription->getKey(),
-                    'provider_subscription_id' => $subscription->getAttribute('provider_subscription_id'),
-                    'payment_method_id' => $subscription->getAttribute('payment_method_id'),
-                    'metadata' => $subscription->getAttribute('metadata'),
-                ], (float) $transaction->getAttribute('amount'));
 
                 if ($response->success) {
                     $transaction->setAttribute('status', 'processed');
@@ -124,6 +128,68 @@ final class PaymentChargeJob implements ShouldQueue
         } finally {
             $lock->release();
         }
+    }
+
+    private function prepareChargePayload(): ?array
+    {
+        return DB::transaction(function (): ?array {
+            $transaction = Transaction::query()
+                ->lockForUpdate()
+                ->find($this->transactionId);
+
+            if (! $transaction instanceof Transaction) {
+                return null;
+            }
+
+            $status = (string) $transaction->getAttribute('status');
+
+            if (in_array($status, ['processed', 'succeeded', 'refunded', 'processing'], true)) {
+                return null;
+            }
+
+            $subscription = Subscription::query()->withTrashed()->find($transaction->getAttribute('subscription_id'));
+
+            if (! $subscription instanceof Subscription) {
+                return null;
+            }
+
+            if ($subscription->trashed()) {
+                $retryCount = (int) $transaction->getAttribute('retry_count') + 1;
+
+                $transaction->setAttribute('retry_count', $retryCount);
+                $transaction->setAttribute('status', 'failed');
+                $transaction->setAttribute('failure_reason', 'Subscription is deleted; recurring charge skipped.');
+                $transaction->setAttribute('last_retry_at', now());
+                $transaction->setAttribute('next_retry_at', null);
+                $transaction->setAttribute('processed_at', now());
+                $transaction->save();
+
+                return null;
+            }
+
+            $metadata = $subscription->getAttribute('metadata');
+            $normalizedMetadata = is_array($metadata) ? $metadata : [];
+            $normalizedMetadata['charge_idempotency_key'] = (string) $transaction->getKey();
+
+            $transaction->setAttribute('status', 'processing');
+            $transaction->setAttribute('failure_reason', null);
+            $transaction->setAttribute('last_retry_at', now());
+            $transaction->setAttribute('next_retry_at', null);
+            $transaction->setAttribute('processed_at', null);
+            $transaction->save();
+
+            return [
+                'provider' => (string) $transaction->getAttribute('provider'),
+                'amount' => (float) $transaction->getAttribute('amount'),
+                'idempotency_key' => (string) $transaction->getKey(),
+                'charge_payload' => [
+                    'subscription_id' => $subscription->getKey(),
+                    'provider_subscription_id' => $subscription->getAttribute('provider_subscription_id'),
+                    'payment_method_id' => $subscription->getAttribute('payment_method_id'),
+                    'metadata' => $normalizedMetadata,
+                ],
+            ];
+        });
     }
 
     private function nextRetryDate(int $retryCount): ?\Illuminate\Support\Carbon

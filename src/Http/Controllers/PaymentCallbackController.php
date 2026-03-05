@@ -63,6 +63,23 @@ final class PaymentCallbackController
                         ->first();
 
                     if ($existingCall instanceof WebhookCall) {
+                        if ((string) $existingCall->getAttribute('status') === 'failed') {
+                            $existingCall->setAttribute('event_type', $eventType);
+                            $existingCall->setAttribute('idempotency_key', $request->header('x-idempotency-key'));
+                            $existingCall->setAttribute('payload', $payload);
+                            $existingCall->setAttribute('headers', $request->headers->all());
+                            $existingCall->setAttribute('status', 'pending');
+                            $existingCall->setAttribute('error_message', null);
+                            $existingCall->setAttribute('processed_at', null);
+                            $existingCall->save();
+
+                            return [
+                                'duplicate' => false,
+                                'dispatch' => true,
+                                'webhook_call_id' => (int) $existingCall->getKey(),
+                            ];
+                        }
+
                         return [
                             'duplicate' => true,
                             'dispatch' => false,

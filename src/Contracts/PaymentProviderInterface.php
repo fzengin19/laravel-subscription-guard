@@ -25,7 +25,7 @@ interface PaymentProviderInterface
 
     public function upgradeSubscription(string $subscriptionId, int|string $newPlanId, string $mode = 'next_period'): SubscriptionResponse;
 
-    public function chargeRecurring(array $subscription, int|float|string $amount): PaymentResponse;
+    public function chargeRecurring(array $subscription, int|float|string $amount, ?string $idempotencyKey = null): PaymentResponse;
 
     public function validateWebhook(array $payload, string $signature): bool;
 

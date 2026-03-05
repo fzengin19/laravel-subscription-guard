@@ -77,6 +77,49 @@ it('returns duplicate response without creating second webhook record', function
     Bus::assertDispatchedTimes(FinalizeWebhookEventJob::class, 1);
 });
 
+it('re-opens failed webhook call and re-dispatches processing on retry', function (): void {
+    Bus::fake();
+
+    WebhookCall::query()->create([
+        'provider' => 'iyzico',
+        'event_type' => 'payment.success',
+        'event_id' => 'evt_iyzico_failed_retry_001',
+        'idempotency_key' => 'first-attempt',
+        'payload' => ['event_id' => 'evt_iyzico_failed_retry_001', 'event_type' => 'payment.success', 'attempt' => 1],
+        'headers' => [],
+        'status' => 'failed',
+        'error_message' => 'Invalid signature',
+        'processed_at' => now(),
+    ]);
+
+    $response = sendWebhook('iyzico', [
+        'event_id' => 'evt_iyzico_failed_retry_001',
+        'event_type' => 'payment.success',
+        'attempt' => 2,
+    ]);
+
+    $response->assertStatus(202)->assertJson([
+        'status' => 'accepted',
+        'provider' => 'iyzico',
+        'event_id' => 'evt_iyzico_failed_retry_001',
+        'duplicate' => false,
+    ]);
+
+    $webhookCall = WebhookCall::query()
+        ->where('provider', 'iyzico')
+        ->where('event_id', 'evt_iyzico_failed_retry_001')
+        ->first();
+
+    expect(WebhookCall::query()->count())->toBe(1);
+    expect($webhookCall)->not->toBeNull();
+    expect((string) $webhookCall?->getAttribute('status'))->toBe('pending');
+    expect($webhookCall?->getAttribute('processed_at'))->toBeNull();
+    expect($webhookCall?->getAttribute('error_message'))->toBeNull();
+    expect((int) ($webhookCall?->getAttribute('payload')['attempt'] ?? 0))->toBe(2);
+
+    Bus::assertDispatchedTimes(FinalizeWebhookEventJob::class, 1);
+});
+
 it('rejects webhook requests for unknown providers', function (): void {
     $response = sendWebhook('unknown', [
         'event_id' => 'evt_unknown_001',

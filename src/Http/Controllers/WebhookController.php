@@ -6,6 +6,7 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Http\Controllers;
 
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\FinalizeWebhookEventJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
@@ -29,36 +30,67 @@ final class WebhookController
         $eventId = $this->resolveEventId($provider, $payload, $request->getContent());
         $eventType = $this->resolveEventType($payload);
 
-        $existingCall = WebhookCall::query()
-            ->where('provider', $provider)
-            ->where('event_id', $eventId)
-            ->first();
+        $lock = cache()->lock('subguard:webhook-intake:'.$provider.':'.$eventId, 10);
 
-        if ($existingCall instanceof WebhookCall) {
-            if ($provider === 'paytr') {
-                return response('OK', 200)->header('Content-Type', 'text/plain');
-            }
+        try {
+            $result = $lock->block(5, function () use ($provider, $eventId, $eventType, $request, $payload): array {
+                return DB::transaction(function () use ($provider, $eventId, $eventType, $request, $payload): array {
+                    $existingCall = WebhookCall::query()
+                        ->where('provider', $provider)
+                        ->where('event_id', $eventId)
+                        ->lockForUpdate()
+                        ->first();
 
-            return response()->json([
-                'status' => 'accepted',
-                'provider' => $provider,
-                'event_id' => $eventId,
-                'duplicate' => true,
-            ]);
+                    if ($existingCall instanceof WebhookCall) {
+                        if ((string) $existingCall->getAttribute('status') === 'failed') {
+                            $existingCall->setAttribute('event_type', $eventType);
+                            $existingCall->setAttribute('idempotency_key', $request->header('x-idempotency-key'));
+                            $existingCall->setAttribute('payload', $payload);
+                            $existingCall->setAttribute('headers', $request->headers->all());
+                            $existingCall->setAttribute('status', 'pending');
+                            $existingCall->setAttribute('error_message', null);
+                            $existingCall->setAttribute('processed_at', null);
+                            $existingCall->save();
+
+                            return [
+                                'duplicate' => false,
+                                'dispatch' => true,
+                                'webhook_call_id' => (int) $existingCall->getKey(),
+                            ];
+                        }
+
+                        return [
+                            'duplicate' => true,
+                            'dispatch' => false,
+                            'webhook_call_id' => (int) $existingCall->getKey(),
+                        ];
+                    }
+
+                    $webhookCall = WebhookCall::query()->create([
+                        'provider' => $provider,
+                        'event_type' => $eventType,
+                        'event_id' => $eventId,
+                        'idempotency_key' => $request->header('x-idempotency-key'),
+                        'payload' => $payload,
+                        'headers' => $request->headers->all(),
+                        'status' => 'pending',
+                    ]);
+
+                    return [
+                        'duplicate' => false,
+                        'dispatch' => true,
+                        'webhook_call_id' => (int) $webhookCall->getKey(),
+                    ];
+                });
+            });
+        } finally {
+            $lock->release();
         }
 
-        $webhookCall = WebhookCall::query()->create([
-            'provider' => $provider,
-            'event_type' => $eventType,
-            'event_id' => $eventId,
-            'idempotency_key' => $request->header('x-idempotency-key'),
-            'payload' => $payload,
-            'headers' => $request->headers->all(),
-            'status' => 'pending',
-        ]);
-
-        FinalizeWebhookEventJob::dispatch((int) $webhookCall->getKey())
-            ->onQueue($this->paymentManager->queueName('webhooks_queue', 'subguard-webhooks'));
+        if (($result['dispatch'] ?? false) === true) {
+            FinalizeWebhookEventJob::dispatch((int) $result['webhook_call_id'])
+                ->onQueue($this->paymentManager->queueName('webhooks_queue', 'subguard-webhooks'));
+        }
 
         if ($provider === 'paytr') {
             return response('OK', 200)->header('Content-Type', 'text/plain');
@@ -68,8 +100,8 @@ final class WebhookController
             'status' => 'accepted',
             'provider' => $provider,
             'event_id' => $eventId,
-            'duplicate' => false,
-        ], 202);
+            'duplicate' => (bool) ($result['duplicate'] ?? false),
+        ], (bool) ($result['duplicate'] ?? false) ? 200 : 202);
     }
 
     private function resolveEventId(string $provider, array $payload, string $rawBody): string

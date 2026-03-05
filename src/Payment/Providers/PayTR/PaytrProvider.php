@@ -95,8 +95,11 @@ class PaytrProvider implements PaymentProviderInterface
         return new SubscriptionResponse(true, $subscriptionId, 'active', ['mode' => $mode, 'new_plan_id' => $newPlanId]);
     }
 
-    public function chargeRecurring(array $subscription, int|float|string $amount): PaymentResponse
+    public function chargeRecurring(array $subscription, int|float|string $amount, ?string $idempotencyKey = null): PaymentResponse
     {
+        $chargeIdempotencyKey = $idempotencyKey
+            ?? (is_array($subscription['metadata'] ?? null) ? (string) ($subscription['metadata']['charge_idempotency_key'] ?? '') : '');
+
         if ($this->mockMode()) {
             return new PaymentResponse(
                 success: true,
@@ -106,11 +109,23 @@ class PaytrProvider implements PaymentProviderInterface
                     'mock' => true,
                     'subscription' => $subscription,
                     'amount' => (float) $amount,
+                    'idempotency_key' => $chargeIdempotencyKey,
                 ]
             );
         }
 
-        return new PaymentResponse(false, null, null, null, null, $subscription, 'PayTR live recurring charge flow is not configured yet.');
+        return new PaymentResponse(
+            false,
+            null,
+            null,
+            null,
+            null,
+            [
+                'subscription' => $subscription,
+                'idempotency_key' => $chargeIdempotencyKey,
+            ],
+            'PayTR live recurring charge flow is not configured yet.'
+        );
     }
 
     public function validateWebhook(array $payload, string $signature): bool
