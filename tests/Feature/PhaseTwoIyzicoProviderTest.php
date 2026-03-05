@@ -134,7 +134,7 @@ it('reconciles pending iyzico subscriptions', function (): void {
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -146,7 +146,7 @@ it('reconciles pending iyzico subscriptions', function (): void {
         'amount' => 199.90,
         'currency' => 'TRY',
         'next_billing_date' => now(),
-    ]);
+    ]));
 
     $dryRunExitCode = Artisan::call('subguard:reconcile-iyzico-subscriptions', ['--dry-run' => true]);
     expect($dryRunExitCode)->toBe(0);
@@ -178,7 +178,7 @@ it('falls back to metadata reconciliation when remote mode is requested in mock 
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -191,7 +191,7 @@ it('falls back to metadata reconciliation when remote mode is requested in mock 
         'currency' => 'TRY',
         'metadata' => ['iyzico_remote_status' => 'canceled'],
         'next_billing_date' => now()->addMonth(),
-    ]);
+    ]));
 
     $exitCode = Artisan::call('subguard:reconcile-iyzico-subscriptions', [
         '--remote' => true,
@@ -223,7 +223,7 @@ it('finalizes iyzico order success webhooks through provider adapter', function 
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -235,7 +235,7 @@ it('finalizes iyzico order success webhooks through provider adapter', function 
         'amount' => 299.90,
         'currency' => 'TRY',
         'next_billing_date' => now(),
-    ]);
+    ]));
 
     $payload = [
         'event_id' => 'evt_phase2_success_001',
@@ -303,6 +303,20 @@ it('accepts iyzico callback endpoints and persists callback payload', function (
 
     expect(WebhookCall::query()->where('event_type', 'payment.3ds.callback')->count())->toBe(1);
     expect(WebhookCall::query()->where('event_type', 'payment.checkout.callback')->count())->toBe(1);
+});
+
+it('derives iyzico callback event id from referenceCode before hash fallback', function (): void {
+    $response = sendCallback('iyzico', '/checkout/callback', [
+        'referenceCode' => 'checkout-ref-001',
+        'status' => 'success',
+    ]);
+
+    $response->assertStatus(202)->assertJson([
+        'status' => 'accepted',
+        'provider' => 'iyzico',
+        'event_id' => 'checkout-ref-001',
+        'duplicate' => false,
+    ]);
 });
 
 it('handles duplicate callback intake atomically for same event id', function (): void {
@@ -468,7 +482,7 @@ it('reconcile command aligns local status using remote status snapshot metadata'
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -482,7 +496,7 @@ it('reconcile command aligns local status using remote status snapshot metadata'
         'metadata' => [
             'iyzico_remote_status' => 'cancelled',
         ],
-    ]);
+    ]));
 
     $exitCode = Artisan::call('subguard:reconcile-iyzico-subscriptions');
 
@@ -536,7 +550,7 @@ it('parses iyzico webhook payload without mutating local billing state in provid
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -548,7 +562,7 @@ it('parses iyzico webhook payload without mutating local billing state in provid
         'amount' => 149.90,
         'currency' => 'TRY',
         'next_billing_date' => now(),
-    ]);
+    ]));
 
     $provider = app(PaymentManager::class)->provider('iyzico');
     $result = $provider->processWebhook([
@@ -591,7 +605,7 @@ it('applies normalized webhook result through subscription service orchestration
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -603,7 +617,7 @@ it('applies normalized webhook result through subscription service orchestration
         'amount' => 249.90,
         'currency' => 'TRY',
         'next_billing_date' => now(),
-    ]);
+    ]));
 
     $service = app(SubscriptionService::class);
 
@@ -648,7 +662,7 @@ it('ignores out-of-order activation webhooks for cancelled subscriptions', funct
         'is_active' => true,
     ]);
 
-    $subscription = Subscription::query()->create([
+    $subscription = Subscription::unguarded(static fn () => Subscription::query()->create([
         'subscribable_type' => 'App\\Models\\User',
         'subscribable_id' => $userId,
         'plan_id' => $plan->getKey(),
@@ -659,7 +673,7 @@ it('ignores out-of-order activation webhooks for cancelled subscriptions', funct
         'billing_interval' => 1,
         'amount' => 59.90,
         'currency' => 'TRY',
-    ]);
+    ]));
 
     app(SubscriptionService::class)->handleWebhookResult(new WebhookResult(
         processed: true,

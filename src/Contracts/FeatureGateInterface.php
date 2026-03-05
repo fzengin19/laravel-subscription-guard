@@ -13,4 +13,6 @@ interface FeatureGateInterface
     public function currentUsage(mixed $subject, string $limit): float;
 
     public function incrementUsage(mixed $subject, string $limit, int|float $amount = 1): bool;
+
+    public function decrementUsage(mixed $subject, string $limit, int|float $amount = 1): bool;
 }

@@ -27,8 +27,8 @@ final class WebhookController
         }
 
         $payload = $request->all();
-        $eventId = $this->resolveEventId($provider, $payload, $request->getContent());
         $eventType = $this->resolveEventType($payload);
+        $eventId = $this->resolveEventId($provider, $payload, $eventType, $request->getContent());
 
         $lock = cache()->lock('subguard:webhook-intake:'.$provider.':'.$eventId, 10);
 
@@ -104,15 +104,32 @@ final class WebhookController
         ], (bool) ($result['duplicate'] ?? false) ? 200 : 202);
     }
 
-    private function resolveEventId(string $provider, array $payload, string $rawBody): string
+    private function resolveEventId(string $provider, array $payload, string $eventType, string $rawBody): string
     {
-        $candidate = $payload['event_id'] ?? $payload['id'] ?? null;
+        $candidates = [
+            $payload['event_id'] ?? null,
+            $payload['eventId'] ?? null,
+            $payload['id'] ?? null,
+            $payload['merchant_oid'] ?? null,
+            $payload['reference_no'] ?? null,
+            $payload['payment_id'] ?? null,
+            $payload['paymentId'] ?? null,
+            $payload['conversationId'] ?? null,
+            $payload['referenceCode'] ?? null,
+            $payload['orderReferenceCode'] ?? null,
+            $payload['subscriptionReferenceCode'] ?? null,
+            $payload['token'] ?? null,
+        ];
 
-        if (is_scalar($candidate) && (string) $candidate !== '') {
-            return (string) $candidate;
+        foreach ($candidates as $candidate) {
+            $normalized = $this->normalizeScalarId($candidate);
+
+            if ($normalized !== null) {
+                return $normalized;
+            }
         }
 
-        return hash('sha256', $provider.'|'.$rawBody);
+        return hash('sha256', $provider.'|'.$eventType.'|'.$rawBody);
     }
 
     private function resolveEventType(array $payload): string
@@ -122,5 +139,16 @@ final class WebhookController
         return is_scalar($candidate) && (string) $candidate !== ''
             ? (string) $candidate
             : 'unknown';
+    }
+
+    private function normalizeScalarId(mixed $candidate): ?string
+    {
+        if (! is_scalar($candidate)) {
+            return null;
+        }
+
+        $value = trim((string) $candidate);
+
+        return $value === '' ? null : $value;
     }
 }

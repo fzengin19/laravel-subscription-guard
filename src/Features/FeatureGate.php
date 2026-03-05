@@ -141,6 +141,51 @@ final class FeatureGate implements FeatureGateInterface
         });
     }
 
+    public function decrementUsage(mixed $subject, string $limit, int|float $amount = 1): bool
+    {
+        $licenseKey = $this->resolveLicenseKey($subject);
+
+        if ($licenseKey === null || $limit === '' || $amount <= 0) {
+            return false;
+        }
+
+        return DB::transaction(function () use ($licenseKey, $limit, $amount): bool {
+            $license = License::query()
+                ->where('key', $licenseKey)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $license instanceof License) {
+                return false;
+            }
+
+            $periodStart = Carbon::now()->startOfMonth();
+            $periodEnd = (clone $periodStart)->endOfMonth();
+            $currentUsage = (float) LicenseUsage::query()
+                ->where('license_id', $license->getKey())
+                ->where('metric', $limit)
+                ->where('period_start', '>=', $periodStart)
+                ->where('period_end', '<=', $periodEnd)
+                ->lockForUpdate()
+                ->sum('quantity');
+
+            if ($currentUsage < (float) $amount) {
+                return false;
+            }
+
+            LicenseUsage::query()->create([
+                'license_id' => $license->getKey(),
+                'metric' => $limit,
+                'quantity' => -1 * (float) $amount,
+                'period_start' => $periodStart,
+                'period_end' => $periodEnd,
+                'metadata' => ['rollback' => true],
+            ]);
+
+            return true;
+        });
+    }
+
     private function resolveLicenseKey(mixed $subject): ?string
     {
         if (is_string($subject)) {

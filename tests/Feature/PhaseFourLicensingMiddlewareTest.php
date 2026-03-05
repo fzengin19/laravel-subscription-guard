@@ -6,7 +6,9 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Route;
 use Illuminate\Testing\TestResponse;
+use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\FeatureGateInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\LicenseManagerInterface;
+use SubscriptionGuard\LaravelSubscriptionGuard\Http\Middleware\LicenseLimitMiddleware;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\License;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 
@@ -59,6 +61,108 @@ it('enforces limit middleware and returns 429 on overflow', function (): void {
 
     $first->assertOk();
     $second->assertStatus(429);
+});
+
+it('reserves usage before executing downstream handler', function (): void {
+    $featureGate = new class implements FeatureGateInterface
+    {
+        public bool $incrementCalled = false;
+
+        public function can(mixed $subject, string $feature): bool
+        {
+            return true;
+        }
+
+        public function limit(mixed $subject, string $limit): int
+        {
+            return 1;
+        }
+
+        public function currentUsage(mixed $subject, string $limit): float
+        {
+            return 0.0;
+        }
+
+        public function incrementUsage(mixed $subject, string $limit, int|float $amount = 1): bool
+        {
+            $this->incrementCalled = true;
+
+            return true;
+        }
+
+        public function decrementUsage(mixed $subject, string $limit, int|float $amount = 1): bool
+        {
+            return true;
+        }
+    };
+
+    $middleware = new LicenseLimitMiddleware($featureGate);
+    $request = Request::create('/phase4/mw/reserve-before-next', 'GET');
+    $request->headers->set('X-SubGuard-License-Key', 'lic_reserve_before_next');
+
+    $downstreamSawReservation = false;
+
+    $response = $middleware->handle(
+        $request,
+        function () use ($featureGate, &$downstreamSawReservation) {
+            $downstreamSawReservation = $featureGate->incrementCalled;
+
+            return response('ok', 200);
+        },
+        'api_calls',
+    );
+
+    expect($response->getStatusCode())->toBe(200);
+    expect($downstreamSawReservation)->toBeTrue();
+});
+
+it('rejects request before downstream handler when reservation cannot be acquired', function (): void {
+    $featureGate = new class implements FeatureGateInterface
+    {
+        public function can(mixed $subject, string $feature): bool
+        {
+            return true;
+        }
+
+        public function limit(mixed $subject, string $limit): int
+        {
+            return 1;
+        }
+
+        public function currentUsage(mixed $subject, string $limit): float
+        {
+            return 0.0;
+        }
+
+        public function incrementUsage(mixed $subject, string $limit, int|float $amount = 1): bool
+        {
+            return false;
+        }
+
+        public function decrementUsage(mixed $subject, string $limit, int|float $amount = 1): bool
+        {
+            return true;
+        }
+    };
+
+    $middleware = new LicenseLimitMiddleware($featureGate);
+    $request = Request::create('/phase4/mw/reserve-reject', 'GET');
+    $request->headers->set('X-SubGuard-License-Key', 'lic_reserve_reject');
+
+    $downstreamExecuted = false;
+
+    $response = $middleware->handle(
+        $request,
+        function () use (&$downstreamExecuted) {
+            $downstreamExecuted = true;
+
+            return response('ok', 200);
+        },
+        'api_calls',
+    );
+
+    expect($response->getStatusCode())->toBe(429);
+    expect($downstreamExecuted)->toBeFalse();
 });
 
 function createPhaseFourLicenseForMiddleware(): License

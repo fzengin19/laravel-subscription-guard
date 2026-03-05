@@ -8,6 +8,7 @@ use Closure;
 use Illuminate\Http\Request;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\FeatureGateInterface;
 use Symfony\Component\HttpFoundation\Response;
+use Throwable;
 
 final class LicenseLimitMiddleware
 {
@@ -27,17 +28,20 @@ final class LicenseLimitMiddleware
             return response()->json(['message' => 'Invalid license limit request.'], 400);
         }
 
-        $currentLimit = $this->featureGate->limit($licenseKey, $metric);
-        $currentUsage = $this->featureGate->currentUsage($licenseKey, $metric);
-
-        if ($currentLimit <= 0 || ($currentUsage + $usageAmount) > (float) $currentLimit) {
+        if (! $this->featureGate->incrementUsage($licenseKey, $metric, $usageAmount)) {
             return response()->json(['message' => 'License limit exceeded.'], 429);
         }
 
-        $response = $next($request);
+        try {
+            $response = $next($request);
+        } catch (Throwable $throwable) {
+            $this->featureGate->decrementUsage($licenseKey, $metric, $usageAmount);
 
-        if ($response->getStatusCode() < 400 && ! $this->featureGate->incrementUsage($licenseKey, $metric, $usageAmount)) {
-            return response()->json(['message' => 'License limit exceeded.'], 429);
+            throw $throwable;
+        }
+
+        if ($response->getStatusCode() >= 400) {
+            $this->featureGate->decrementUsage($licenseKey, $metric, $usageAmount);
         }
 
         return $response;

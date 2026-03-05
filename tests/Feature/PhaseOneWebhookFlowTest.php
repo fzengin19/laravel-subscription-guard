@@ -134,3 +134,36 @@ it('rejects webhook requests for unknown providers', function (): void {
             'reason' => 'Unknown provider.',
         ]);
 });
+
+it('derives webhook event id from paytr merchant reference before hash fallback', function (): void {
+    $response = sendWebhook('paytr', [
+        'merchant_oid' => 'paytr-order-001',
+        'event_type' => 'payment.success',
+    ]);
+
+    $response->assertOk();
+    expect($response->getContent())->toBe('OK');
+
+    $webhookCall = WebhookCall::query()
+        ->where('provider', 'paytr')
+        ->where('event_id', 'paytr-order-001')
+        ->first();
+
+    expect($webhookCall)->not->toBeNull();
+});
+
+it('derives webhook event id from iyzico conversation identifier before hash fallback', function (): void {
+    $response = sendWebhook('iyzico', [
+        'conversationId' => 'iyzico-conv-001',
+        'event_type' => 'payment.success',
+    ]);
+
+    $response
+        ->assertStatus(202)
+        ->assertJson([
+            'status' => 'accepted',
+            'provider' => 'iyzico',
+            'event_id' => 'iyzico-conv-001',
+            'duplicate' => false,
+        ]);
+});
