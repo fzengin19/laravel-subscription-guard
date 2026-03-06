@@ -58,19 +58,13 @@ final class ProcessScheduledPlanChangeJob implements ShouldQueue
                     ->find($subscriptionId);
 
                 if (! $subscription instanceof Subscription) {
-                    $change->setAttribute('status', 'failed');
-                    $change->setAttribute('error_message', 'Subscription not found for scheduled plan change.');
-                    $change->setAttribute('processed_at', now());
-                    $change->save();
+                    $change->markFailed('Subscription not found for scheduled plan change.');
 
                     return;
                 }
 
                 if ($subscription->trashed()) {
-                    $change->setAttribute('status', 'failed');
-                    $change->setAttribute('error_message', 'Subscription is deleted for scheduled plan change.');
-                    $change->setAttribute('processed_at', now());
-                    $change->save();
+                    $change->markFailed('Subscription is deleted for scheduled plan change.');
 
                     return;
                 }
@@ -89,10 +83,7 @@ final class ProcessScheduledPlanChangeJob implements ShouldQueue
                 $subscription->setAttribute('scheduled_change_id', null);
                 $subscription->save();
 
-                $change->setAttribute('status', 'processed');
-                $change->setAttribute('processed_at', now());
-                $change->setAttribute('error_message', null);
-                $change->save();
+                $change->markProcessed();
 
                 DispatchBillingNotificationsJob::dispatch('plan-change.processed', [
                     'scheduled_plan_change_id' => $change->getKey(),

@@ -11,6 +11,22 @@ class ScheduledPlanChange extends Model
 {
     protected $guarded = ['id'];
 
+    public function markFailed(string $message): void
+    {
+        $this->setAttribute('status', 'failed');
+        $this->setAttribute('error_message', $message);
+        $this->setAttribute('processed_at', now());
+        $this->save();
+    }
+
+    public function markProcessed(): void
+    {
+        $this->setAttribute('status', 'processed');
+        $this->setAttribute('processed_at', now());
+        $this->setAttribute('error_message', null);
+        $this->save();
+    }
+
     protected function casts(): array
     {
         return [
