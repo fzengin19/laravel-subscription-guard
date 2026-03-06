@@ -11,6 +11,34 @@ class WebhookCall extends Model
 {
     protected $guarded = ['id'];
 
+    public function markFailed(string $message): void
+    {
+        $this->setAttribute('status', 'failed');
+        $this->setAttribute('error_message', $message);
+        $this->setAttribute('processed_at', now());
+        $this->save();
+    }
+
+    public function markProcessed(?string $message = null): void
+    {
+        $this->setAttribute('status', 'processed');
+        $this->setAttribute('processed_at', now());
+        $this->setAttribute('error_message', $message);
+        $this->save();
+    }
+
+    public function resetForRetry(array $attributes): void
+    {
+        foreach ($attributes as $key => $value) {
+            $this->setAttribute($key, $value);
+        }
+
+        $this->setAttribute('status', 'pending');
+        $this->setAttribute('error_message', null);
+        $this->setAttribute('processed_at', null);
+        $this->save();
+    }
+
     protected function casts(): array
     {
         return [
