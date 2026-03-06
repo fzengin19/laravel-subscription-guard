@@ -294,6 +294,48 @@ it('activates and deactivates license with domain and max activation enforcement
     expect(LicenseActivation::query()->where('license_id', $license?->getKey())->whereNull('deactivated_at')->count())->toBe(0);
 });
 
+it('reconciles drifted current activations on deactivate', function (): void {
+    [$publicKey, $privateKey] = makeEd25519KeyPair();
+
+    config()->set('subscription-guard.license.keys.public', $publicKey);
+    config()->set('subscription-guard.license.keys.private', $privateKey);
+
+    $userId = (int) \Illuminate\Support\Facades\DB::table('users')->insertGetId([
+        'name' => 'Phase4 Drift User',
+        'email' => 'phase4-drift-user@example.test',
+        'password' => 'secret',
+        'created_at' => now(),
+        'updated_at' => now(),
+    ]);
+
+    $plan = Plan::query()->create([
+        'name' => 'Phase4 Drift Plan',
+        'slug' => 'phase4-drift-plan',
+        'price' => 79.00,
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'is_active' => true,
+    ]);
+
+    $manager = app(LicenseManagerInterface::class);
+    $licenseKey = $manager->generate($plan->getKey(), $userId);
+
+    expect($manager->activate($licenseKey, 'drift.test'))->toBeTrue();
+
+    $license = License::query()->where('key', $licenseKey)->first();
+
+    expect($license)->not->toBeNull();
+
+    $license?->setAttribute('current_activations', 99);
+    $license?->save();
+
+    expect($manager->deactivate($licenseKey, 'drift.test'))->toBeTrue();
+
+    expect((int) (License::query()->where('key', $licenseKey)->first()?->getAttribute('current_activations') ?? 0))->toBe(0);
+    expect(LicenseActivation::query()->where('license_id', $license?->getKey())->whereNull('deactivated_at')->count())->toBe(0);
+});
+
 function makeEd25519KeyPair(): array
 {
     $pair = sodium_crypto_sign_keypair();

@@ -151,12 +151,7 @@ final class LicenseManager implements LicenseManagerInterface
                 'metadata' => [],
             ]);
 
-            $activeCount = LicenseActivation::query()
-                ->where('license_id', $license->getKey())
-                ->whereNull('deactivated_at')
-                ->count();
-
-            $license->setAttribute('current_activations', $activeCount);
+            $license->setAttribute('current_activations', $activeCount + 1);
 
             if ($boundDomain === '') {
                 $license->setAttribute('domain', $domain);
