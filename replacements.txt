@@ -1,0 +1,2 @@
+regex:<server\s+name="IYZICO_API_KEY"\s+value="[^"]*"\s*/>==><server name="IYZICO_API_KEY" value=""/>
+regex:<server\s+name="IYZICO_SECRET_KEY"\s+value="[^"]*"\s*/>==><server name="IYZICO_SECRET_KEY" value=""/>
