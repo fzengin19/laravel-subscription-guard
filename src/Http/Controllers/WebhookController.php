@@ -7,6 +7,7 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Http\Controllers;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use SubscriptionGuard\LaravelSubscriptionGuard\Http\Concerns\ResolvesWebhookEventId;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\FinalizeWebhookEventJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
@@ -14,6 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 final class WebhookController
 {
+    use ResolvesWebhookEventId;
+
     public function __construct(private readonly PaymentManager $paymentManager) {}
 
     public function __invoke(Request $request, string $provider): JsonResponse|Response
@@ -43,14 +46,12 @@ final class WebhookController
 
                     if ($existingCall instanceof WebhookCall) {
                         if ((string) $existingCall->getAttribute('status') === 'failed') {
-                            $existingCall->setAttribute('event_type', $eventType);
-                            $existingCall->setAttribute('idempotency_key', $request->header('x-idempotency-key'));
-                            $existingCall->setAttribute('payload', $payload);
-                            $existingCall->setAttribute('headers', $request->headers->all());
-                            $existingCall->setAttribute('status', 'pending');
-                            $existingCall->setAttribute('error_message', null);
-                            $existingCall->setAttribute('processed_at', null);
-                            $existingCall->save();
+                            $existingCall->resetForRetry([
+                                'event_type' => $eventType,
+                                'idempotency_key' => $request->header('x-idempotency-key'),
+                                'payload' => $payload,
+                                'headers' => $request->headers->all(),
+                            ]);
 
                             return [
                                 'duplicate' => false,
@@ -104,34 +105,6 @@ final class WebhookController
         ], (bool) ($result['duplicate'] ?? false) ? 200 : 202);
     }
 
-    private function resolveEventId(string $provider, array $payload, string $eventType, string $rawBody): string
-    {
-        $candidates = [
-            $payload['event_id'] ?? null,
-            $payload['eventId'] ?? null,
-            $payload['id'] ?? null,
-            $payload['merchant_oid'] ?? null,
-            $payload['reference_no'] ?? null,
-            $payload['payment_id'] ?? null,
-            $payload['paymentId'] ?? null,
-            $payload['conversationId'] ?? null,
-            $payload['referenceCode'] ?? null,
-            $payload['orderReferenceCode'] ?? null,
-            $payload['subscriptionReferenceCode'] ?? null,
-            $payload['token'] ?? null,
-        ];
-
-        foreach ($candidates as $candidate) {
-            $normalized = $this->normalizeScalarId($candidate);
-
-            if ($normalized !== null) {
-                return $normalized;
-            }
-        }
-
-        return hash('sha256', $provider.'|'.$eventType.'|'.$rawBody);
-    }
-
     private function resolveEventType(array $payload): string
     {
         $candidate = $payload['event_type'] ?? $payload['type'] ?? 'unknown';
@@ -139,16 +112,5 @@ final class WebhookController
         return is_scalar($candidate) && (string) $candidate !== ''
             ? (string) $candidate
             : 'unknown';
-    }
-
-    private function normalizeScalarId(mixed $candidate): ?string
-    {
-        if (! is_scalar($candidate)) {
-            return null;
-        }
-
-        $value = trim((string) $candidate);
-
-        return $value === '' ? null : $value;
     }
 }

@@ -58,10 +58,7 @@ final class FinalizeWebhookEventJob implements ShouldQueue
                 $provider = (string) $webhookCall->getAttribute('provider');
 
                 if (! $paymentManager->hasProvider($provider)) {
-                    $webhookCall->setAttribute('status', 'failed');
-                    $webhookCall->setAttribute('error_message', 'Unknown provider.');
-                    $webhookCall->setAttribute('processed_at', now());
-                    $webhookCall->save();
+                    $webhookCall->markFailed('Unknown provider.');
 
                     return;
                 }
@@ -69,10 +66,7 @@ final class FinalizeWebhookEventJob implements ShouldQueue
                 try {
                     $providerAdapter = $paymentManager->provider($provider);
                 } catch (ProviderException) {
-                    $webhookCall->setAttribute('status', 'processed');
-                    $webhookCall->setAttribute('processed_at', now());
-                    $webhookCall->setAttribute('error_message', 'Provider adapter not configured; webhook accepted as no-op.');
-                    $webhookCall->save();
+                    $webhookCall->markProcessed('Provider adapter not configured; webhook accepted as no-op.');
 
                     return;
                 }
@@ -82,10 +76,7 @@ final class FinalizeWebhookEventJob implements ShouldQueue
                 $signature = $this->extractSignature($provider, $webhookCall->getAttribute('headers'));
 
                 if (! $providerAdapter->validateWebhook($normalizedPayload, $signature)) {
-                    $webhookCall->setAttribute('status', 'failed');
-                    $webhookCall->setAttribute('error_message', 'Invalid webhook signature.');
-                    $webhookCall->setAttribute('processed_at', now());
-                    $webhookCall->save();
+                    $webhookCall->markFailed('Invalid webhook signature.');
 
                     return;
                 }
@@ -93,18 +84,12 @@ final class FinalizeWebhookEventJob implements ShouldQueue
                 $result = $providerAdapter->processWebhook($normalizedPayload);
 
                 if (! $result->processed) {
-                    $webhookCall->setAttribute('status', 'failed');
-                    $webhookCall->setAttribute('error_message', $result->message ?? 'Webhook processing failed.');
-                    $webhookCall->setAttribute('processed_at', now());
-                    $webhookCall->save();
+                    $webhookCall->markFailed($result->message ?? 'Webhook processing failed.');
 
                     return;
                 }
 
-                $webhookCall->setAttribute('status', 'processed');
-                $webhookCall->setAttribute('processed_at', now());
-                $webhookCall->setAttribute('error_message', $result->message);
-                $webhookCall->save();
+                $webhookCall->markProcessed($result->message);
 
                 $subscriptionService->handleWebhookResult($result, $provider);
 
