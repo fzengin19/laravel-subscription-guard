@@ -115,40 +115,39 @@ final class MeteredBillingProcessor
 
                     if (! $chargeResponse->success) {
                         $retryCount = max(1, (int) $transaction->getAttribute('retry_count') + 1);
-                        $transaction->setAttribute('status', 'failed');
-                        $transaction->setAttribute('retry_count', $retryCount);
-                        $transaction->setAttribute('failure_reason', (string) ($chargeResponse->failureReason ?? 'Metered provider charge failed.'));
-                        $transaction->setAttribute('last_retry_at', now());
                         $transaction->setAttribute('provider_transaction_id', $chargeResponse->transactionId);
-                        $transaction->setAttribute('provider_response', array_merge($baseProviderResponse, [
+                        $providerResponse = array_merge($baseProviderResponse, [
                             'idempotency_key' => $idempotencyKey,
                             'charge_success' => false,
                             'charge_provider_response' => $chargeResponse->providerResponse,
-                        ]));
-                        $transaction->save();
+                        ]);
+                        $transaction->markFailed(
+                            (string) ($chargeResponse->failureReason ?? 'Metered provider charge failed.'),
+                            $retryCount,
+                            null,
+                            $providerResponse,
+                            true,
+                        );
 
                         return false;
                     }
 
-                    $transaction->setAttribute('provider_transaction_id', $chargeResponse->transactionId);
-                    $transaction->setAttribute('provider_response', array_merge($baseProviderResponse, [
+                    $providerTransactionId = $chargeResponse->transactionId;
+                    $providerResponse = array_merge($baseProviderResponse, [
                         'idempotency_key' => $idempotencyKey,
                         'charge_success' => true,
                         'charge_provider_response' => $chargeResponse->providerResponse,
-                    ]));
+                    ]);
                 } else {
-                    $transaction->setAttribute('provider_transaction_id', null);
-                    $transaction->setAttribute('provider_response', array_merge($baseProviderResponse, [
+                    $providerTransactionId = null;
+                    $providerResponse = array_merge($baseProviderResponse, [
                         'idempotency_key' => $idempotencyKey,
                         'charge_success' => true,
                         'charge_provider_response' => [],
-                    ]));
+                    ]);
                 }
 
-                $transaction->setAttribute('status', 'processed');
-                $transaction->setAttribute('processed_at', now());
-                $transaction->setAttribute('failure_reason', null);
-                $transaction->save();
+                $transaction->markProcessed($providerTransactionId, $providerResponse, true);
 
                 $usageQuery->delete();
 

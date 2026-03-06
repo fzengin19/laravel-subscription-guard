@@ -55,9 +55,7 @@ final class ProcessDunningRetryJob implements ShouldQueue
                     return;
                 }
 
-                $transaction->setAttribute('status', 'retrying');
-                $transaction->setAttribute('last_retry_at', now());
-                $transaction->save();
+                $transaction->markRetrying();
 
                 PaymentChargeJob::dispatch((int) $transaction->getKey())
                     ->onQueue($paymentManager->queueName('queue', 'subguard-main'));

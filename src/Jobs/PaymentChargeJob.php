@@ -75,12 +75,11 @@ final class PaymentChargeJob implements ShouldQueue
                 $provider = (string) $transaction->getAttribute('provider');
 
                 if ($response->success) {
-                    $transaction->setAttribute('status', 'processed');
-                    $transaction->setAttribute('provider_transaction_id', $response->transactionId);
-                    $transaction->setAttribute('failure_reason', null);
-                    $transaction->setAttribute('processed_at', now());
-                    $transaction->setAttribute('provider_response', $response->providerResponse);
-                    $transaction->save();
+                    $transaction->markProcessed(
+                        $response->transactionId,
+                        $response->providerResponse,
+                        true,
+                    );
 
                     $subscriptionService->handlePaymentResult(new PaymentResponse(
                         success: true,
@@ -105,14 +104,13 @@ final class PaymentChargeJob implements ShouldQueue
                     $retryCount = 3;
                 }
 
-                $transaction->setAttribute('retry_count', $retryCount);
-                $transaction->setAttribute('status', 'failed');
-                $transaction->setAttribute('failure_reason', $failureReason);
-                $transaction->setAttribute('last_retry_at', now());
-                $transaction->setAttribute('next_retry_at', $terminalFailure ? null : $this->nextRetryDate($retryCount));
-                $transaction->setAttribute('processed_at', now());
-                $transaction->setAttribute('provider_response', $response->providerResponse);
-                $transaction->save();
+                $transaction->markFailed(
+                    $failureReason,
+                    $retryCount,
+                    $terminalFailure ? null : $this->nextRetryDate($retryCount),
+                    $response->providerResponse,
+                    true,
+                );
 
                 if (in_array((string) $subscription->getAttribute('status'), [SubscriptionStatus::Active->value, 'trialing'], true)) {
                     $subscription->setAttribute('status', SubscriptionStatus::PastDue->value);
@@ -162,13 +160,7 @@ final class PaymentChargeJob implements ShouldQueue
             if ($subscription->trashed()) {
                 $retryCount = (int) $transaction->getAttribute('retry_count') + 1;
 
-                $transaction->setAttribute('retry_count', $retryCount);
-                $transaction->setAttribute('status', 'failed');
-                $transaction->setAttribute('failure_reason', 'Subscription is deleted; recurring charge skipped.');
-                $transaction->setAttribute('last_retry_at', now());
-                $transaction->setAttribute('next_retry_at', null);
-                $transaction->setAttribute('processed_at', now());
-                $transaction->save();
+                $transaction->markFailed('Subscription is deleted; recurring charge skipped.', $retryCount);
 
                 return null;
             }
@@ -177,12 +169,7 @@ final class PaymentChargeJob implements ShouldQueue
             $normalizedMetadata = is_array($metadata) ? $metadata : [];
             $normalizedMetadata['charge_idempotency_key'] = (string) $transaction->getKey();
 
-            $transaction->setAttribute('status', 'processing');
-            $transaction->setAttribute('failure_reason', null);
-            $transaction->setAttribute('last_retry_at', now());
-            $transaction->setAttribute('next_retry_at', null);
-            $transaction->setAttribute('processed_at', null);
-            $transaction->save();
+            $transaction->markProcessing();
 
             return [
                 'provider' => (string) $transaction->getAttribute('provider'),
