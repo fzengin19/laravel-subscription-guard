@@ -5,11 +5,7 @@ declare(strict_types=1);
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico;
 
 use Iyzipay\Model\Address;
-use Iyzipay\Model\BasketItem;
 use Iyzipay\Model\Buyer;
-use Iyzipay\Model\Card;
-use Iyzipay\Model\CardInformation;
-use Iyzipay\Model\CardList;
 use Iyzipay\Model\CheckoutFormInitialize;
 use Iyzipay\Model\Customer;
 use Iyzipay\Model\Payment;
@@ -19,12 +15,9 @@ use Iyzipay\Model\Subscription\SubscriptionCancel;
 use Iyzipay\Model\Subscription\SubscriptionCreate;
 use Iyzipay\Model\Subscription\SubscriptionUpgrade;
 use Iyzipay\Options as IyzipayOptions;
-use Iyzipay\Request\CreateCardRequest;
 use Iyzipay\Request\CreateCheckoutFormInitializeRequest;
 use Iyzipay\Request\CreatePaymentRequest;
 use Iyzipay\Request\CreateRefundRequest;
-use Iyzipay\Request\DeleteCardRequest;
-use Iyzipay\Request\RetrieveCardListRequest;
 use Iyzipay\Request\Subscription\SubscriptionCancelRequest;
 use Iyzipay\Request\Subscription\SubscriptionCreateRequest;
 use Iyzipay\Request\Subscription\SubscriptionUpgradeRequest;
@@ -39,6 +32,12 @@ use Throwable;
 
 final class IyzicoProvider implements PaymentProviderInterface
 {
+    public function __construct(
+        private readonly IyzicoRequestBuilder $requestBuilder,
+        private readonly IyzicoCardManager $cardManager,
+        private readonly IyzicoSupport $support,
+    ) {}
+
     public function getName(): string
     {
         return 'iyzico';
@@ -414,30 +413,17 @@ final class IyzicoProvider implements PaymentProviderInterface
 
     private function mockMode(): bool
     {
-        return (bool) ($this->config()['mock'] ?? false);
+        return $this->support->mockMode();
     }
 
     private function missingCredentials(): array
     {
-        $config = $this->config();
-        $missing = [];
-
-        if (trim((string) ($config['api_key'] ?? '')) === '') {
-            $missing[] = 'api_key';
-        }
-
-        if (trim((string) ($config['secret_key'] ?? '')) === '') {
-            $missing[] = 'secret_key';
-        }
-
-        return $missing;
+        return $this->support->missingCredentials();
     }
 
     private function config(): array
     {
-        $config = config('subscription-guard.providers.drivers.iyzico', []);
-
-        return is_array($config) ? $config : [];
+        return $this->support->config();
     }
 
     private function livePay(int|float|string $amount, array $details, string $mode): PaymentResponse
@@ -505,354 +491,77 @@ final class IyzicoProvider implements PaymentProviderInterface
 
     private function options(): IyzipayOptions
     {
-        $config = $this->config();
-        $options = new IyzipayOptions;
-        $options->setApiKey((string) ($config['api_key'] ?? ''));
-        $options->setSecretKey((string) ($config['secret_key'] ?? ''));
-        $options->setBaseUrl((string) ($config['base_url'] ?? 'https://sandbox-api.iyzipay.com'));
-
-        return $options;
+        return $this->support->options();
     }
 
     private function isSuccessfulResponse(object $response): bool
     {
-        $status = method_exists($response, 'getStatus') ? strtolower((string) $response->getStatus()) : '';
-
-        return $status === 'success';
+        return $this->support->isSuccessfulResponse($response);
     }
 
     private function responseError(object $response, string $fallback): string
     {
-        if (method_exists($response, 'getErrorMessage')) {
-            $message = trim((string) $response->getErrorMessage());
-
-            if ($message !== '') {
-                return $message;
-            }
-        }
-
-        return $fallback;
+        return $this->support->responseError($response, $fallback);
     }
 
     private function decodeRawPayload(object $response): array
     {
-        if (! method_exists($response, 'getRawResult')) {
-            return [];
-        }
-
-        $raw = $response->getRawResult();
-
-        if (! is_string($raw) || $raw === '') {
-            return [];
-        }
-
-        $decoded = json_decode($raw, true);
-
-        return is_array($decoded) ? $decoded : [];
+        return $this->support->decodeRawPayload($response);
     }
 
     public function listStoredCards(string $cardUserKey): array
     {
-        if ($cardUserKey === '') {
-            return [];
-        }
-
-        if ($this->mockMode() || $this->missingCredentials() !== []) {
-            return [];
-        }
-
-        try {
-            $request = new RetrieveCardListRequest;
-            $request->setConversationId((string) uniqid('iyz_cards_', true));
-            $request->setCardUserKey($cardUserKey);
-
-            $response = CardList::retrieve($request, $this->options());
-
-            if (! $this->isSuccessfulResponse($response)) {
-                return [];
-            }
-
-            $payload = $this->decodeRawPayload($response);
-
-            return is_array($payload['cardDetails'] ?? null) ? $payload['cardDetails'] : [];
-        } catch (Throwable) {
-            return [];
-        }
+        return $this->cardManager->listStoredCards($cardUserKey);
     }
 
     public function deleteStoredCard(string $cardUserKey, string $cardToken): bool
     {
-        if ($cardUserKey === '' || $cardToken === '') {
-            return false;
-        }
-
-        if ($this->mockMode()) {
-            return true;
-        }
-
-        if ($this->missingCredentials() !== []) {
-            return false;
-        }
-
-        try {
-            $request = new DeleteCardRequest;
-            $request->setConversationId((string) uniqid('iyz_card_delete_', true));
-            $request->setCardUserKey($cardUserKey);
-            $request->setCardToken($cardToken);
-
-            $response = Card::delete($request, $this->options());
-
-            return $this->isSuccessfulResponse($response);
-        } catch (Throwable) {
-            return false;
-        }
+        return $this->cardManager->deleteStoredCard($cardUserKey, $cardToken);
     }
 
     private function ensureRemoteCardTokens(array $details): array
     {
-        $paymentMethod = $details['payment_method'] ?? [];
-
-        if (! is_array($paymentMethod)) {
-            $paymentMethod = [];
-        }
-
-        $hasCardToken = is_string($paymentMethod['provider_card_token'] ?? null) && trim((string) $paymentMethod['provider_card_token']) !== '';
-        $hasCardUserKey = is_string($paymentMethod['provider_customer_token'] ?? null) && trim((string) $paymentMethod['provider_customer_token']) !== '';
-
-        if ($hasCardToken && $hasCardUserKey) {
-            return $details;
-        }
-
-        $cardData = $details['payment_card'] ?? $details['card'] ?? [];
-
-        if (! is_array($cardData)) {
-            return $details;
-        }
-
-        $cardNumber = trim((string) ($cardData['card_number'] ?? ''));
-        $expireMonth = trim((string) ($cardData['expire_month'] ?? $cardData['expiry_month'] ?? ''));
-        $expireYear = trim((string) ($cardData['expire_year'] ?? $cardData['expiry_year'] ?? ''));
-
-        if ($cardNumber === '' || $expireMonth === '' || $expireYear === '') {
-            return $details;
-        }
-
-        $email = trim((string) ($paymentMethod['email'] ?? $details['customer']['email'] ?? ''));
-
-        if ($email === '' || $this->mockMode() || $this->missingCredentials() !== []) {
-            return $details;
-        }
-
-        try {
-            $request = new CreateCardRequest;
-            $request->setConversationId((string) ($details['conversation_id'] ?? uniqid('iyz_card_', true)));
-            $request->setExternalId((string) ($details['payable_id'] ?? uniqid('payable_', true)));
-            $request->setEmail($email);
-
-            $cardUserKey = trim((string) ($paymentMethod['provider_customer_token'] ?? $cardData['card_user_key'] ?? ''));
-
-            if ($cardUserKey !== '') {
-                $request->setCardUserKey($cardUserKey);
-            }
-
-            $cardInformation = new CardInformation;
-            $cardInformation->setCardAlias((string) ($cardData['card_alias'] ?? 'Subscription Card'));
-            $cardInformation->setCardNumber($cardNumber);
-            $cardInformation->setExpireMonth($expireMonth);
-            $cardInformation->setExpireYear($expireYear);
-            $cardInformation->setCardHolderName((string) ($cardData['card_holder_name'] ?? ''));
-            $request->setCard($cardInformation);
-
-            $response = Card::create($request, $this->options());
-
-            if (! $this->isSuccessfulResponse($response)) {
-                return $details;
-            }
-
-            $remoteCardUserKey = method_exists($response, 'getCardUserKey') ? (string) $response->getCardUserKey() : '';
-            $remoteCardToken = method_exists($response, 'getCardToken') ? (string) $response->getCardToken() : '';
-
-            if ($remoteCardUserKey !== '') {
-                $paymentMethod['provider_customer_token'] = $remoteCardUserKey;
-                $cardData['card_user_key'] = $remoteCardUserKey;
-            }
-
-            if ($remoteCardToken !== '') {
-                $paymentMethod['provider_card_token'] = $remoteCardToken;
-                $paymentMethod['provider_method_id'] = $remoteCardToken;
-                $cardData['card_token'] = $remoteCardToken;
-            }
-
-            $details['payment_method'] = $paymentMethod;
-            $details['payment_card'] = $cardData;
-
-            return $details;
-        } catch (Throwable) {
-            return $details;
-        }
+        return $this->cardManager->ensureRemoteCardTokens($details);
     }
 
     private function cardPayload(array $details): array
     {
-        $paymentMethod = $details['payment_method'] ?? [];
-
-        if (! is_array($paymentMethod)) {
-            return [];
-        }
-
-        return [
-            'provider_customer_token' => (string) ($paymentMethod['provider_customer_token'] ?? ''),
-            'provider_card_token' => (string) ($paymentMethod['provider_card_token'] ?? ''),
-            'provider_method_id' => (string) ($paymentMethod['provider_method_id'] ?? ''),
-            'card_last_four' => (string) ($paymentMethod['card_last_four'] ?? ''),
-            'card_brand' => (string) ($paymentMethod['card_brand'] ?? ''),
-            'card_expiry' => (string) ($paymentMethod['card_expiry'] ?? ''),
-        ];
+        return $this->cardManager->cardPayload($details);
     }
 
     private function paymentCard(array $details): PaymentCard
     {
-        $cardData = $details['payment_card'] ?? $details['card'] ?? [];
-
-        if (! is_array($cardData)) {
-            $cardData = [];
-        }
-
-        $card = new PaymentCard;
-        $card->setCardHolderName((string) ($cardData['card_holder_name'] ?? ''));
-        $card->setCardNumber((string) ($cardData['card_number'] ?? ''));
-        $card->setExpireMonth((string) ($cardData['expire_month'] ?? $cardData['expiry_month'] ?? ''));
-        $card->setExpireYear((string) ($cardData['expire_year'] ?? $cardData['expiry_year'] ?? ''));
-        $card->setCvc((string) ($cardData['cvc'] ?? ''));
-        $card->setCardToken((string) ($cardData['card_token'] ?? ''));
-        $card->setCardUserKey((string) ($cardData['card_user_key'] ?? ''));
-
-        return $card;
+        return $this->requestBuilder->paymentCard($details);
     }
 
     private function subscriptionPaymentCard(array $details): array
     {
-        $cardData = $details['payment_card'] ?? $details['card'] ?? [];
-
-        if (! is_array($cardData)) {
-            $cardData = [];
-        }
-
-        return [
-            'cardHolderName' => (string) ($cardData['card_holder_name'] ?? ''),
-            'cardNumber' => (string) ($cardData['card_number'] ?? ''),
-            'expireYear' => (string) ($cardData['expire_year'] ?? $cardData['expiry_year'] ?? ''),
-            'expireMonth' => (string) ($cardData['expire_month'] ?? $cardData['expiry_month'] ?? ''),
-            'cvc' => (string) ($cardData['cvc'] ?? ''),
-            'registerCard' => (int) ($cardData['register_card'] ?? 0),
-            'cardAlias' => (string) ($cardData['card_alias'] ?? ''),
-            'cardUserKey' => (string) ($cardData['card_user_key'] ?? ''),
-        ];
+        return $this->requestBuilder->subscriptionPaymentCard($details);
     }
 
     private function customer(array $details): Customer
     {
-        $customerData = $details['customer'] ?? [];
-
-        if (! is_array($customerData)) {
-            $customerData = [];
-        }
-
-        $customer = new Customer;
-        $customer->setName((string) ($customerData['name'] ?? ''));
-        $customer->setSurname((string) ($customerData['surname'] ?? ''));
-        $customer->setIdentityNumber((string) ($customerData['identity_number'] ?? ''));
-        $customer->setEmail((string) ($customerData['email'] ?? ''));
-        $customer->setGsmNumber((string) ($customerData['gsm_number'] ?? ''));
-        $customer->setShippingContactName((string) ($customerData['shipping_contact_name'] ?? ''));
-        $customer->setShippingCity((string) ($customerData['shipping_city'] ?? ''));
-        $customer->setShippingDistrict((string) ($customerData['shipping_district'] ?? ''));
-        $customer->setShippingCountry((string) ($customerData['shipping_country'] ?? ''));
-        $customer->setShippingAddress((string) ($customerData['shipping_address'] ?? ''));
-        $customer->setShippingZipCode((string) ($customerData['shipping_zip_code'] ?? ''));
-        $customer->setBillingContactName((string) ($customerData['billing_contact_name'] ?? ''));
-        $customer->setBillingCity((string) ($customerData['billing_city'] ?? ''));
-        $customer->setBillingDistrict((string) ($customerData['billing_district'] ?? ''));
-        $customer->setBillingCountry((string) ($customerData['billing_country'] ?? ''));
-        $customer->setBillingAddress((string) ($customerData['billing_address'] ?? ''));
-        $customer->setBillingZipCode((string) ($customerData['billing_zip_code'] ?? ''));
-
-        return $customer;
+        return $this->requestBuilder->customer($details);
     }
 
     private function buyer(array $details): Buyer
     {
-        $buyerData = $details['buyer'] ?? [];
-
-        if (! is_array($buyerData)) {
-            $buyerData = [];
-        }
-
-        $buyer = new Buyer;
-        $buyer->setId((string) ($buyerData['id'] ?? uniqid('buyer_', true)));
-        $buyer->setName((string) ($buyerData['name'] ?? ''));
-        $buyer->setSurname((string) ($buyerData['surname'] ?? ''));
-        $buyer->setIdentityNumber((string) ($buyerData['identity_number'] ?? ''));
-        $buyer->setEmail((string) ($buyerData['email'] ?? ''));
-        $buyer->setGsmNumber((string) ($buyerData['gsm_number'] ?? ''));
-        $buyer->setRegistrationAddress((string) ($buyerData['registration_address'] ?? ''));
-        $buyer->setCity((string) ($buyerData['city'] ?? ''));
-        $buyer->setCountry((string) ($buyerData['country'] ?? ''));
-        $buyer->setZipCode((string) ($buyerData['zip_code'] ?? ''));
-        $buyer->setIp((string) ($buyerData['ip'] ?? request()->ip() ?? '127.0.0.1'));
-
-        return $buyer;
+        return $this->requestBuilder->buyer($details, request()->ip());
     }
 
     private function address(array $details, string $key): Address
     {
-        $addressData = $details[$key] ?? [];
-
-        if (! is_array($addressData)) {
-            $addressData = [];
-        }
-
-        $address = new Address;
-        $address->setAddress((string) ($addressData['address'] ?? ''));
-        $address->setZipCode((string) ($addressData['zip_code'] ?? ''));
-        $address->setContactName((string) ($addressData['contact_name'] ?? ''));
-        $address->setCity((string) ($addressData['city'] ?? ''));
-        $address->setCountry((string) ($addressData['country'] ?? ''));
-
-        return $address;
+        return $this->requestBuilder->address($details, $key);
     }
 
     private function basketItems(array $details): array
     {
-        $items = $details['basket_items'] ?? [];
-
-        if (! is_array($items)) {
-            return [];
-        }
-
-        $basketItems = [];
-
-        foreach ($items as $index => $item) {
-            if (! is_array($item)) {
-                continue;
-            }
-
-            $basketItem = new BasketItem;
-            $basketItem->setId((string) ($item['id'] ?? 'item_'.$index));
-            $basketItem->setPrice($this->money($item['price'] ?? 0));
-            $basketItem->setName((string) ($item['name'] ?? 'Subscription Item'));
-            $basketItem->setCategory1((string) ($item['category1'] ?? 'Subscription'));
-            $basketItem->setCategory2((string) ($item['category2'] ?? ''));
-            $basketItem->setItemType((string) ($item['item_type'] ?? 'VIRTUAL'));
-            $basketItems[] = $basketItem;
-        }
-
-        return $basketItems;
+        return $this->requestBuilder->basketItems($details);
     }
 
     private function money(int|float|string $amount): string
     {
-        return number_format((float) $amount, 2, '.', '');
+        return $this->requestBuilder->money($amount);
     }
 
     private function computeWebhookSignature(array $payload, string $secret): string
