@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Support\Carbon;
 
 class Transaction extends Model
 {
@@ -40,6 +41,61 @@ class Transaction extends Model
         'coupon_id',
         'discount_id',
     ];
+
+    public function markFailed(
+        string $reason,
+        int $retryCount,
+        ?Carbon $nextRetryAt = null,
+        mixed $providerResponse = null,
+        bool $replaceProviderResponse = false,
+    ): void {
+        $this->setAttribute('retry_count', $retryCount);
+        $this->setAttribute('status', 'failed');
+        $this->setAttribute('failure_reason', $reason);
+        $this->setAttribute('last_retry_at', now());
+        $this->setAttribute('next_retry_at', $nextRetryAt);
+        $this->setAttribute('processed_at', now());
+
+        if ($replaceProviderResponse || $providerResponse !== null) {
+            $this->setAttribute('provider_response', $providerResponse);
+        }
+
+        $this->save();
+    }
+
+    public function markProcessing(): void
+    {
+        $this->setAttribute('status', 'processing');
+        $this->setAttribute('failure_reason', null);
+        $this->setAttribute('last_retry_at', now());
+        $this->setAttribute('next_retry_at', null);
+        $this->setAttribute('processed_at', null);
+        $this->save();
+    }
+
+    public function markRetrying(): void
+    {
+        $this->setAttribute('status', 'retrying');
+        $this->setAttribute('last_retry_at', now());
+        $this->save();
+    }
+
+    public function markProcessed(
+        ?string $transactionId,
+        mixed $providerResponse = null,
+        bool $replaceProviderResponse = false,
+    ): void {
+        $this->setAttribute('status', 'processed');
+        $this->setAttribute('provider_transaction_id', $transactionId);
+        $this->setAttribute('failure_reason', null);
+        $this->setAttribute('processed_at', now());
+
+        if ($replaceProviderResponse || $providerResponse !== null) {
+            $this->setAttribute('provider_response', $providerResponse);
+        }
+
+        $this->save();
+    }
 
     protected function casts(): array
     {
