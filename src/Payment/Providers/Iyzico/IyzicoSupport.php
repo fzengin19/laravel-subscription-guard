@@ -83,4 +83,36 @@ final class IyzicoSupport
 
         return is_array($decoded) ? $decoded : [];
     }
+
+    public function refundableTransactionId(array $payload, string $fallback): string
+    {
+        foreach (['itemTransactions', 'paymentItems'] as $key) {
+            $items = $payload[$key] ?? null;
+
+            if (! is_array($items)) {
+                continue;
+            }
+
+            foreach ($items as $item) {
+                if (! is_array($item)) {
+                    continue;
+                }
+
+                $transactionId = trim((string) ($item['paymentTransactionId'] ?? ''));
+
+                if ($transactionId !== '') {
+                    return $transactionId;
+                }
+            }
+        }
+
+        $paymentId = trim((string) ($payload['paymentId'] ?? ''));
+
+        return $paymentId !== '' ? $paymentId : $fallback;
+    }
+
+    public function pricingPlanRecurrenceCount(int $recurrenceCount): ?int
+    {
+        return $recurrenceCount > 0 ? $recurrenceCount : null;
+    }
 }

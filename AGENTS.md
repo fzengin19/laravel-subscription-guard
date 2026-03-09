@@ -41,7 +41,19 @@ docs/plans/
 │   ├── plan.md
 │   ├── work-results.md
 │   └── risk-notes.md
-└── phase-5-integration-testing/
+├── phase-5-integration-testing/
+│   ├── plan.md
+│   ├── work-results.md
+│   └── risk-notes.md
+├── phase-6-security-hardening/
+│   ├── plan.md
+│   ├── work-results.md
+│   └── risk-notes.md
+├── phase-7-code-simplification/
+│   ├── plan.md
+│   ├── work-results.md
+│   └── risk-notes.md
+└── phase-8-iyzico-live-sandbox-validation/
     ├── plan.md
     ├── work-results.md
     └── risk-notes.md
@@ -54,6 +66,12 @@ docs/plans/
 3. **Work Results**: Faz tamamlandıktan sonra yazılır
 4. **Risk Notes**: Faz tamamlandıktan sonra yazılır
 5. **Dosya Disiplini**: Her faz klasöründe `plan.md`, `work-results.md`, `risk-notes.md` zorunlu
+
+### Gizli Bilgi ve Env Dosyaları
+
+1. **Env dosyaları AI Assistant'a kapalıdır**: `.env`, `.env.*`, `*.env` ve benzeri dosyalar okunmaz, diff'i alınmaz, içeriği gösterilmez.
+2. **Env kontrolü kullanıcıdadır**: Credential veya env doğrulaması gerekirse kullanıcı kendi tarafında kontrol eder ve gerekli sonucu paylaşır.
+3. **Secret hijyeni**: Gerçek secret içeren env dosyaları commit akışına dahil edilmez; gerekli yönlendirme kullanıcı tarafından yapılır.
 
 ### Faz Başlatma Protokolü
 
@@ -83,7 +101,7 @@ Bir faz tamamlandığında:
    - Technical debt
 
 3. **Master plan durumunu güncelle**:
-   - Faz durumu (Planlama/Bitti)
+   - Faz durumu (Planlama/Yürütülüyor/Bitti)
    - Bir sonraki fazın bağımlılık doğrulaması
 
 ---
@@ -92,14 +110,17 @@ Bir faz tamamlandığında:
 
 | Faz | Süre | Durum | Plan |
 |-----|------|-------|------|
-| 1. Core Infrastructure | 4 hafta | Planlama | [plan.md](phase-1-core-infrastructure/plan.md) |
-| 2. iyzico Provider | 4 hafta | Bekliyor | [plan.md](phase-2-iyzico-provider/plan.md) |
-| 3. PayTR Provider | 3 hafta | Bekliyor | [plan.md](phase-3-paytr-provider/plan.md) |
-| 4. Licensing System | 5 hafta | Bekliyor | [plan.md](phase-4-licensing-system/plan.md) |
-| 4.1. Implementation Closure | 2 hafta | Planlama | [plan.md](phase-4-1-implementation-closure/plan.md) |
-| 5. Integration & Testing | 4 hafta | Bekliyor | [plan.md](phase-5-integration-testing/plan.md) |
+| 1. Core Infrastructure | 4 hafta | Bitti | [plan.md](phase-1-core-infrastructure/plan.md) |
+| 2. iyzico Provider | 4 hafta | Bitti | [plan.md](phase-2-iyzico-provider/plan.md) |
+| 3. PayTR Provider | 3 hafta | Bitti | [plan.md](phase-3-paytr-provider/plan.md) |
+| 4. Licensing System | 5 hafta | Bitti | [plan.md](phase-4-licensing-system/plan.md) |
+| 4.1. Implementation Closure | 2 hafta | Bitti | [plan.md](phase-4-1-implementation-closure/plan.md) |
+| 5. Integration & Testing | 4 hafta | Bitti | [plan.md](phase-5-integration-testing/plan.md) |
+| 6. Security Hardening | 3 hafta | Bitti | [plan.md](phase-6-security-hardening/plan.md) |
+| 7. Code Simplification | 3 hafta | Yürütülüyor | [plan.md](phase-7-code-simplification/plan.md) |
+| 8. iyzico Live Sandbox Validation | 3 hafta | Yürütülüyor | [plan.md](phase-8-iyzico-live-sandbox-validation/plan.md) |
 
-**Toplam Süre**: 22 hafta
+**Toplam Süre**: 31 hafta
 
 ---
 
@@ -219,3 +240,7 @@ php artisan subscription-guard:simulate-webhook iyzico payment.success
 - Planlama sistemi entegre edildi
 - 5 faz planı oluşturuldu
 - Master plan temizlendi (kodlar kaldırıldı)
+
+### 2026-03-09
+- Faz dizini ve durum tablosu Faz 6-8 ile hizalandı
+- Plan durum standardı `Planlama/Yürütülüyor/Bitti` olarak netleştirildi

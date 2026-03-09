@@ -1,6 +1,6 @@
 # Faz 7: Code Simplification & Architectural Decomposition (Plan v3)
 
-> **Durum**: Planlama
+> **Durum**: Yürütülüyor
 > **Hedef Başlangıç**: 2026-03-06
 > **Tahmini Süre**: 3 hafta
 > **Bağımlılıklar**: Faz 1-6 çıktıları, özellikle Faz 6 security hardening guardrail'leri

@@ -146,7 +146,7 @@ final class IyzicoProvider implements PaymentProviderInterface
                     return new RefundResponse(false, null, $payload, $this->responseError($response, 'Iyzico refund failed.'));
                 }
 
-                $refundId = is_scalar($payload['paymentTransactionId'] ?? null) ? (string) $payload['paymentTransactionId'] : null;
+                $refundId = $this->support->refundableTransactionId($payload, $transactionId);
 
                 return new RefundResponse(true, $refundId, $payload);
             } catch (Throwable $exception) {

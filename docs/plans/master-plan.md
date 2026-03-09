@@ -1,8 +1,8 @@
 # Laravel Subscription Guard - Master Plan
 
-> **Versiyon**: 3.1 (Yol Haritası)
-> **Tarih**: 2026-03-03
-> **Durum**: Execution in Progress (Faz 1-6 tamamlandı, Faz 7 planlandı)
+> **Versiyon**: 3.2 (Yol Haritası)
+> **Tarih**: 2026-03-09
+> **Durum**: Execution in Progress (Faz 1-6 tamamlandı, Faz 7 yürütülüyor, Faz 8 başlatıldı)
 
 ---
 
@@ -109,6 +109,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 1: Core Infrastructure (4 Hafta)
 **Detaylı Plan**: `phase-1-core-infrastructure/plan.md`
+**Durum**: Tamamlandı (2026-03-04)
 
 **Kapsam**:
 - Veritabanı şeması (migrations)
@@ -129,6 +130,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 2: iyzico Provider (4 Hafta)
 **Detaylı Plan**: `phase-2-iyzico-provider/plan.md`
+**Durum**: Tamamlandı (2026-03-04)
 
 **Kapsam**:
 - iyzico SDK entegrasyonu
@@ -169,6 +171,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 4: Licensing System (5 Hafta)
 **Detaylı Plan**: `phase-4-licensing-system/plan.md`
+**Durum**: Tamamlandı (2026-03-05)
 
 **Kapsam**:
 - License key generation (Ed25519)
@@ -207,6 +210,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 5: Integration & Testing (4 Hafta)
 **Detaylı Plan**: `phase-5-integration-testing/plan.md`
+**Durum**: Tamamlandı (2026-03-05)
 
 **Kapsam**:
 - Frontend components (v1 dışı, v1.1 backlog)
@@ -246,7 +250,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 7: Code Simplification & Readability Hardening (3 Hafta)
 **Detaylı Plan**: `phase-7-code-simplification/plan.md`
-**Durum**: Planlama (2026-03-05)
+**Durum**: Yürütülüyor (2026-03-05)
 
 **Kapsam**:
 - Davranış değiştirmeden kod sadeleştirme ve okunabilirlik iyileştirmesi
@@ -258,6 +262,24 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 - Faz 7 planı
 - Faz 7 work-results ve risk-notes şablonları
 - Readability odaklı kabul kriterleri ve rollout sırası
+
+---
+
+### Faz 8: iyzico Live Sandbox Validation & External Test Isolation (3 Hafta)
+**Detaylı Plan**: `phase-8-iyzico-live-sandbox-validation/plan.md`
+**Durum**: Yürütülüyor (2026-03-09)
+
+**Kapsam**:
+- Deterministic suite'i bozmadan ayrı bir iyzico live sandbox testsuite kurma
+- Gerçek sandbox üzerinden payment, refund, card vault, remote plan sync ve reconcile contractlarını doğrulama
+- Operator-assisted webhook/callback roundtrip akışını tam otomatik testlerden ayırma
+- Secret hijyeni, run isolation, cleanup ve forensic artifact stratejisini standartlaştırma
+
+**Çıktılar**:
+- `phpunit.live.xml.dist` ile ayrık live test config'i
+- `tests/Live/Iyzico/*` ve `tests/Support/Live/*` altında live sandbox validation katmanı
+- Faz 8 work-results ve risk-notes şablonları
+- Live test çalıştırma ve gizli bilgi yönetimi için netleştirilmiş dokümantasyon/config kuralları
 
 ---
 
