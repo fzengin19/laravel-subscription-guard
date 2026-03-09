@@ -156,10 +156,6 @@ final class IyzicoSandboxGate
 
     private static function environment(?array $env = null): array
     {
-        if (! is_array($env)) {
-            self::loadLiveEnvironmentFileIfConfigured();
-        }
-
         $values = is_array($env) ? $env : [
             'RUN_IYZICO_LIVE_SANDBOX_TESTS' => self::readEnvironmentValue('RUN_IYZICO_LIVE_SANDBOX_TESTS'),
             'IYZICO_MOCK' => self::readEnvironmentValue('IYZICO_MOCK'),
@@ -169,11 +165,118 @@ final class IyzicoSandboxGate
             'IYZICO_CALLBACK_URL' => self::readEnvironmentValue('IYZICO_CALLBACK_URL'),
         ];
 
+        if (! is_array($env)) {
+            foreach (self::fallbackEnvironmentValues() as $key => $value) {
+                if (($values[$key] ?? null) === null) {
+                    $values[$key] = $value;
+                }
+            }
+        }
+
         if (! isset($values['IYZICO_BASE_URL']) || trim((string) $values['IYZICO_BASE_URL']) === '') {
             $values['IYZICO_BASE_URL'] = 'https://sandbox-api.iyzipay.com';
         }
 
         return $values;
+    }
+
+    private static function fallbackEnvironmentValues(): array
+    {
+        $file = self::readEnvironmentValue('SUBGUARD_LIVE_ENV_FILE') ?? '.env.test';
+        $path = self::resolveEnvironmentFilePath($file);
+
+        if ($path === null || ! is_file($path) || ! is_readable($path)) {
+            return [];
+        }
+
+        $contents = file_get_contents($path);
+
+        if (! is_string($contents) || $contents === '') {
+            return [];
+        }
+
+        $parsed = class_exists(Dotenv::class)
+            ? Dotenv::parse($contents)
+            : self::parseEnvironmentContents($contents);
+
+        $values = [];
+
+        foreach (self::fallbackEnvironmentKeys() as $key) {
+            $value = $parsed[$key] ?? null;
+
+            if (! is_scalar($value)) {
+                continue;
+            }
+
+            $trimmed = trim((string) $value);
+
+            if ($trimmed !== '') {
+                $values[$key] = $trimmed;
+            }
+        }
+
+        return $values;
+    }
+
+    private static function resolveEnvironmentFilePath(string $file): ?string
+    {
+        $file = trim($file);
+
+        if ($file === '') {
+            return null;
+        }
+
+        if (str_starts_with($file, DIRECTORY_SEPARATOR) || preg_match('/^[A-Za-z]:\\\\/', $file) === 1) {
+            return $file;
+        }
+
+        return dirname(__DIR__, 3).DIRECTORY_SEPARATOR.$file;
+    }
+
+    private static function parseEnvironmentContents(string $contents): array
+    {
+        $values = [];
+
+        foreach (preg_split('/\r\n|\r|\n/', $contents) ?: [] as $line) {
+            $line = trim($line);
+
+            if ($line === '' || str_starts_with($line, '#')) {
+                continue;
+            }
+
+            $separator = strpos($line, '=');
+
+            if ($separator === false) {
+                continue;
+            }
+
+            $key = trim(substr($line, 0, $separator));
+            $value = trim(substr($line, $separator + 1));
+
+            if ($key === '') {
+                continue;
+            }
+
+            if ((str_starts_with($value, '"') && str_ends_with($value, '"')) || (str_starts_with($value, "'") && str_ends_with($value, "'"))) {
+                $value = substr($value, 1, -1);
+            }
+
+            $values[$key] = $value;
+        }
+
+        return $values;
+    }
+
+    private static function fallbackEnvironmentKeys(): array
+    {
+        return [
+            'RUN_IYZICO_LIVE_SANDBOX_TESTS',
+            'IYZICO_MOCK',
+            'IYZICO_API_KEY',
+            'IYZICO_SECRET_KEY',
+            'IYZICO_BASE_URL',
+            'IYZICO_CALLBACK_URL',
+        ];
     }
 
     private static function applyRuntimeConfiguration(array $values): void
@@ -202,32 +305,6 @@ final class IyzicoSandboxGate
         if ($callbackUrl !== '') {
             config()->set('subscription-guard.providers.drivers.iyzico.callback_url', $callbackUrl);
         }
-    }
-
-    private static function loadLiveEnvironmentFileIfConfigured(): void
-    {
-        static $loaded = false;
-
-        if ($loaded) {
-            return;
-        }
-
-        $loaded = true;
-
-        $file = self::readEnvironmentValue('SUBGUARD_LIVE_ENV_FILE');
-
-        if ($file === null || $file === '' || ! class_exists(Dotenv::class)) {
-            return;
-        }
-
-        $path = dirname(__DIR__, 3);
-        $fullPath = $path.'/'.$file;
-
-        if (! is_file($fullPath)) {
-            return;
-        }
-
-        Dotenv::createMutable($path, $file)->safeLoad();
     }
 
     private static function readEnvironmentValue(string $key): ?string
