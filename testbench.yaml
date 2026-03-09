@@ -1,0 +1,45 @@
+laravel: '@testbench'
+
+env:
+  - APP_ENV=test
+  - APP_MAINTENANCE_DRIVER=file
+  - BCRYPT_ROUNDS=4
+  - CACHE_STORE=array
+  - DB_CONNECTION=testing
+  - 'DB_DATABASE=:memory:'
+  - MAIL_MAILER=array
+  - QUEUE_CONNECTION=sync
+  - SESSION_DRIVER=array
+  - TELESCOPE_ENABLED=false
+
+providers:
+  # - Workbench\App\Providers\WorkbenchServiceProvider
+
+migrations:
+  - workbench/database/migrations
+
+seeders:
+  - Workbench\Database\Seeders\DatabaseSeeder
+
+workbench:
+  start: '/'
+  install: true
+  health: false
+  discovers:
+    web: true
+    api: true
+    commands: true
+    components: false
+    factories: true
+    views: false
+  build:
+    - asset-publish
+    - create-sqlite-db
+    - db-wipe
+    - migrate-fresh
+  assets:
+    - laravel-assets
+  sync:
+    - from: storage
+      to: workbench/storage
+      reverse: true
