@@ -1,8 +1,9 @@
 # Faz 8: iyzico Live Sandbox Validation & External Test Isolation (Plan v1)
 
-> **Durum**: Yürütülüyor
+> **Durum**: Bitti
 > **Hedef Başlangıç**: 2026-03-06
 > **Tahmini Süre**: 3 hafta
+> **Tamamlanma Tarihi**: 2026-03-09
 > **Bağımlılıklar**: Faz 1-7 çıktıları, özellikle Faz 2 iyzico provider live branch'leri, Faz 5 integration test altyapısı, Faz 6 güvenlik/idempotency guardrail'leri ve Faz 7 sadeleştirme refactor'ları
 
 ---
@@ -45,10 +46,30 @@ Bu faz aşağıdaki doğrulanmış gerçekler üzerine kurulacaktır:
 - `tests/Feature/PhaseTwoIyzicoProviderTest.php` şu anda `beforeEach` içinde `iyzico.mock=true` ve key/secret=`null` override ettiği için gerçek sandbox çağrısı yapmaz.
 - Default `phpunit.xml.dist` live suite için yeterli izolasyonu sağlamıyor; Phase 8 kapsamında mock-safe varsayımlar ve ayrı live config netleştirilmelidir.
 - Mevcut test ağacında `tests/Live` veya `@group live` benzeri bir izolasyon yoktur.
+- `vendor/bin/pest --list-tests` çıktısı şu anda `tests/Live/Iyzico/*` ile `tests/Unit/Support/Live/*` dosyalarını default suite içinde keşfetmektedir; skip gate güvenlik ağıdır, gerçek izolasyon sınırı değildir.
+- `tests/Pest.php` tüm `tests/` ağacını `tests/TestCase.php` ile bağlamaktadır; DB connection seçimi ve migration setup bugün fiilen PHP katmanında sahiplenilmektedir.
+- `IyzicoSandboxGate` mevcut halinde `SUBGUARD_LIVE_ENV_FILE` görürse `Dotenv::createMutable(...)->safeLoad()` ile live env dosyasını yükleyip `putenv`, `$_ENV`, `$_SERVER` ve Laravel config'ini mutate etmektedir; bu nedenle live helper katmanı default suite keşfi sırasında çalıştırılmamalıdır.
+- `phpunit.xml.dist` normal suite için `APP_ENV`, `DB_CONNECTION`, `DB_DATABASE`, `DB_URL`, cache, queue, mail ve session varsayımlarını açıkça pinlememektedir; bugün bu davranış `tests/TestCase.php` ve ortam tesadüflerine bırakılmış durumdadır.
 - `IyzicoProvider` gerçek branch'leri mevcut: `pay`, `refund`, `createSubscription`, `cancelSubscription`, `upgradeSubscription`, `listStoredCards`, `deleteStoredCard`, `validateWebhook`, `processWebhook`.
 - `subguard:sync-plans --remote` ve `subguard:reconcile-iyzico-subscriptions --remote` gerçek sandbox'a çıkabilecek durumda tasarlanmıştır.
 - `sync-plans` bugünkü haliyle local plan başına ayrı remote product üretmektedir; iyzico upgrade ise aynı product içindeki pricing plan'lar arasında çalışır. Bu nedenle gerçek `upgrade` testi mevcut strateji ile doğrudan güvenilir değildir.
 - iyzico sandbox; test kartları, checkout form, 3DS init, subscription create/cancel, card storage, refund ve remote reconciliation için kullanılabilir; fakat callback/webhook roundtrip için publicly reachable HTTPS endpoint gerekir.
+
+### 3.1) Doğrulanan Yapılandırma Sorunları
+
+1. **Sorun 1 - Default suite live testleri keşfediyor**: **Doğrulandı / Kritik**. `phpunit.xml.dist` altındaki blanket `tests` directory tanımı nedeniyle normal suite live test dosyalarını yüklüyor.
+2. **Sorun 2 - `testbench.yaml` build adımları PHPUnit runtime ile çakışıyor**: **Kısmen doğrulandı**. `create-sqlite-db` ve `migrate-fresh` workbench/CLI tarafında gerçek sqlite dosyası üretir; fakat resmi Testbench davranışında bu YAML, PHPUnit runtime için ana kaynak değildir. Risk runtime çakışmasından çok drift ve sahiplik belirsizliğidir.
+3. **Sorun 3 - `phpunit.xml.dist` DB/runtime yapılandırması eksik**: **Doğrulandı / Yüksek**. Normal suite'in DB/cache/queue/mail/session davranışı tam olarak process-level PHPUnit config içinde pinlenmemiştir.
+4. **Sorun 4 - `.gitignore` içindeki `testbench.yaml` makine drift'i yaratıyor**: **Doğrulandı / Yüksek**. Dosya şu anda ignored/local duruma düşebildiği için workbench davranışı repo dışı sapabilir.
+5. **Sorun 5 - queue fallback `database` bağlantısına kayabiliyor**: **Doğrulandı / Orta**. Paket varsayılanı değiştirilmeyecek olsa da test runtime'ında `QUEUE_CONNECTION` ve `SUBGUARD_QUEUE_CONNECTION` açıkça pinlenmelidir.
+
+### 3.2) Yapılandırma Sahipliği (Single Source of Truth)
+
+- `phpunit.xml.dist`: Default/deterministic suite'in process-level env ve runtime-safe defaults kaynağıdır.
+- `phpunit.live.xml.dist`: Live suite'in process-level env, bootstrap contract ve explicit opt-in davranışının kaynağıdır.
+- `tests/TestCase.php`: Laravel `testing` connection tanımı, base schema ve package migration ownership burada kalır.
+- `testbench.yaml`: PHPUnit runtime için değil, workbench/CLI davranışı için canonical dosya veya açıkça lokal-only artefakt olarak yönetilir; gri alanda bırakılmaz.
+- `IyzicoSandboxGate`: Sadece live suite gate/preflight/helper katmanıdır; normal suite env loader'ı değildir.
 
 ---
 
@@ -77,32 +98,69 @@ Bu faz aşağıdaki doğrulanmış gerçekler üzerine kurulacaktır:
 
 ## 5) Uygulama Fazları
 
-### Phase A: Test Isolation & Config Hygiene
+### Phase A: Test Isolation, Runtime Ownership & Config Hygiene
 
-#### A1: Default suite'i güvenli hale getir
+#### A1: Katman sahipliğini ve test keşif sınırını netleştir
 
 **Dosyalar**:
 - `phpunit.xml.dist`
+- `composer.json`
+- `tests/Unit/Support/Live/` [TAŞINACAK / YENİDEN ADLANDIRILACAK]
+- `tests/Live/Support/` [YENİ veya TAŞINAN]
+- `tests/TestCase.php`
+- `testbench.yaml`
 - `.gitignore`
 - `README.md`
 - `docs/INSTALLATION.md`
 
 Yapılacaklar:
 
-- `phpunit.xml.dist` içinden committed iyzico sandbox credential değerleri çıkarılacak.
-- Default test config'i live yerine deterministic/mock güvenli varsayılanlara çekilecek.
+- `phpunit.xml.dist` içindeki blanket `tests` keşfi kaldırılacak; default suite sadece deterministic test ağaçlarını yükleyecek.
+- `tests/Unit/Support/Live/*` dosyaları audit edilip live-only bir ağaca (`tests/Live/Support/*` veya eşdeğeri) taşınacak; relocation öncesi path/reference taraması yapılacak.
+- `composer test` ile `composer test-live` invocation contract'ı açıkça ayrılacak.
+- `tests/TestCase.php` DB connection tanımı ve migration ownership için korunacak; PHPUnit XML içine connection array taşınmayacak.
+- `testbench.yaml` için tek karar verilecek: **önerilen yol** canonical tracked workbench config'e dönmek ve `.gitignore` belirsizliğini kaldırmak. Eğer local-only kalacaksa bunun PHPUnit runtime ile ilgisi olmadığı README/INSTALLATION içinde açıkça yazılacak.
 - Lokal live env dosyası repo dışında tutulacak ve `.gitignore` ile korunacak.
-- README ve installation docs içinde live sandbox testlerin default suite dışında olduğu açıkça yazılacak.
+- README ve installation docs içinde default suite ile live suite farkı ve env precedence zinciri açıkça yazılacak.
 
-#### A2: Ayrı live testsuite oluştur
+#### A2: Normal suite runtime'ını process-level olarak pinle
+
+**Dosyalar**:
+- `phpunit.xml.dist`
+- `tests/TestCase.php`
+- `config/subscription-guard.php`
+
+Yapılacaklar:
+
+- `phpunit.xml.dist` içine normal suite için explicit runtime defaults eklenecek:
+  - `APP_ENV=test`
+  - `APP_MAINTENANCE_DRIVER=file`
+  - `BCRYPT_ROUNDS=4`
+  - `CACHE_STORE=array`
+  - `MAIL_MAILER=array`
+  - `SESSION_DRIVER=array`
+  - `QUEUE_CONNECTION=sync`
+  - `SUBGUARD_QUEUE_CONNECTION=sync`
+  - `DB_URL=` (boş string ile override kapatma)
+  - `DB_CONNECTION=testing`
+  - `DB_DATABASE=:memory:`
+  - `TELESCOPE_ENABLED=false`
+  - `IYZICO_MOCK=true`
+- `config/subscription-guard.php` içindeki production default'lar korunacak; test determinism package default değiştirerek değil test config'i pinleyerek sağlanacak.
+- Gerekirse normal suite için küçük bir regression testi eklenip `database.default=testing`, queue=`sync`, cache=`array` beklentileri sabitlenecek.
+
+#### A3: Ayrı live testsuite ve bootstrap contract'ını sertleştir
 
 **Dosyalar**:
 - `phpunit.live.xml.dist` [YENİ]
 - `tests/Live/Iyzico/` [YENİ klasör]
+- `tests/Live/Support/` [YENİ veya TAŞINAN]
 
 Yapılacaklar:
 
 - Mevcut suite'ten tamamen ayrı live test çalıştırma konfigürasyonu oluşturulacak.
+- Live suite discovery sadece live dosyalarını kapsayacak; non-live testler bu suite'e sızmayacak.
+- `composer test-live` ve `./vendor/bin/pest -c phpunit.live.xml.dist` Phase 8 için tek desteklenen live entrypoint'ler olacak.
 - Live suite için özel env flag'ler tanımlanacak:
   - `RUN_IYZICO_LIVE_SANDBOX_TESTS=true`
   - `IYZICO_MOCK=false`
@@ -112,8 +170,9 @@ Yapılacaklar:
 - `IYZICO_CALLBACK_URL`
 - Live suite, env eksikse fail etmek yerine **skip with reason** davranışı gösterecek.
 - Gerçek credentiallar kullanıcı tarafından yönetilen lokal `.env.test` dosyasından okunacak; AI Assistant env dosyalarını okumayacak ve repo tarafında secret içeren env dosyası tutulmayacak.
+- Live env convenience loading korunacaksa bu davranış sadece live bootstrap altında çalışacak; normal suite discovery sırasında çağrılmayacak.
 
-#### A3: Live helper katmanı ekle
+#### A4: Live helper katmanını env sızıntısına karşı sertleştir
 
 **Dosyalar**:
 - `tests/Support/Live/IyzicoSandboxGate.php` [YENİ]
@@ -129,6 +188,14 @@ Sorumluluklar:
 - resmi iyzico sandbox kart matrisi (success / foreign / failure)
 - remote cleanup kayıtları
 - failure forensic output üretimi
+
+Hardening kuralları:
+
+- **Uygulanan yol**: `IyzicoSandboxGate` önce process env + PHPUnit live config değerlerini kullanır; eksik live anahtarları ise `SUBGUARD_LIVE_ENV_FILE` veya varsayılan `.env.test` içinden allowlisted olarak doldurur.
+- Fallback yükleme mevcut process env değerlerini overwrite etmez; terminalden/export ile verilen değerler her zaman önceliklidir.
+- Gate normal suite sırasında global env mutate eden davranışa sahip olmayacak; provider-specific config set işlemi live gate içinde, explicit koşullar altında yapılacak.
+- Required vs optional live env değişkenleri ve failure/skip davranışı unit testlerle sabitlenecek.
+- `SUBGUARD_LIVE_ENV_FILE` shell/IDE ortamında set olsa bile default suite live helper'lara uğramadığı için deterministic akış etkilenmeyecek.
 
 Kart fixture kuralı:
 
@@ -452,8 +519,13 @@ Belgelenecekler:
 
 | Dosya | İşlem | Faz |
 |---|---|---|
-| `phpunit.xml.dist` | Default suite'i deterministic-safe hale getir | A |
-| `phpunit.live.xml.dist` | YENİ live testsuite config | A |
+| `phpunit.xml.dist` | Default suite keşfi + runtime pinleme | A |
+| `composer.json` | Normal/live suite invocation contract'ı | A |
+| `phpunit.live.xml.dist` | Live testsuite + bootstrap contract | A |
+| `tests/TestCase.php` | DB ownership ve regression guard | A |
+| `tests/Unit/Support/Live/*` | Live-only ağaca taşınacak | A |
+| `tests/Live/Support/*` | Live support helper/test ağacı | A |
+| `testbench.yaml` | Workbench/CLI ownership kararı | A |
 | `tests/Live/Iyzico/PhaseEightIyzicoSandboxPreflightTest.php` | YENİ | B |
 | `tests/Live/Iyzico/PhaseEightIyzicoRemotePlanSyncTest.php` | YENİ | B |
 | `tests/Live/Iyzico/PhaseEightIyzicoPaymentContractsTest.php` | YENİ | C |
@@ -470,7 +542,6 @@ Belgelenecekler:
 | `docs/INSTALLATION.md` | Canlı sandbox kurulum adımları | F |
 | `docs/PROVIDERS.md` | iyzico live sandbox notları | F |
 | `docs/RECIPES.md` | Tunnel/manual run recipe'leri | F |
-| `docs/plans/master-plan.md` | Faz 8 roadmap girişi | roadmap |
 
 ---
 
@@ -479,18 +550,22 @@ Belgelenecekler:
 ### Deterministic Suite (değişmeden kalmalı)
 
 ```bash
+vendor/bin/pest --list-tests
 composer test
 composer analyse
 ```
 
 Kabul kriteri:
 
+- `vendor/bin/pest --list-tests` çıktısında `tests/Live/*` ve live-only support testleri görünmez.
 - Mevcut mock/deterministic suite Phase 8 olmadan da aynı şekilde çalışmaya devam eder.
 - Live env verilmediğinde hiçbir default test sandbox'a çıkmaz.
+- Normal suite içinde `database.default=testing`, queue=`sync`, cache=`array` beklentileri regression seviyesinde doğrulanır.
 
 ### Live Sandbox Suite
 
 ```bash
+composer test-live -- --list-tests
 ./vendor/bin/pest --configuration=phpunit.live.xml.dist tests/Live/Iyzico
 ```
 
@@ -508,6 +583,7 @@ IYZICO_CALLBACK_URL=https://<public-url>/subguard/payment/iyzico/callback \
 
 ### Live Başarı Kriterleri
 
+- `composer test-live -- --list-tests` sadece live test ve live support dosyalarını listeler.
 - Mandatory automatable senaryoların tamamı geçer
 - Unsupported/conditional senaryolar skip değilse açık reason ile raporlanır
 - Forensic artifact set üretilir
@@ -520,6 +596,8 @@ IYZICO_CALLBACK_URL=https://<public-url>/subguard/payment/iyzico/callback \
 | Risk | Etki | Olasılık | Önlem |
 |---|---|---|---|
 | Default suite'in yanlışlıkla live sandbox'a çıkması | Fatal | Orta | Ayrı testsuite + double gate + default mock-safe config |
+| `testbench.yaml` drift'i nedeniyle workbench/CLI davranışının makineden makineye değişmesi | Yüksek | Orta | Canonical tracked dosya veya açık local-only strateji; `.gitignore` belirsizliği kaldır |
+| Normal suite'in `DB_URL` / queue fallback nedeniyle beklenmeyen driver kullanması | Yüksek | Orta | `phpunit.xml.dist` içinde DB/cache/queue/mail/session explicit pinleme |
 | Secrets'in repo'ya veya loglara sızması | Fatal | Orta | Committed config'ten secret çıkar, masked logging kullan |
 | Localhost callback URL'nin iyzico tarafından erişilememesi | Yüksek | Yüksek | Operator-assisted tunnel recipe + preflight reachability check |
 | Upgrade testinin yanlış fixture nedeniyle sahte pozitif vermesi | Yüksek | Yüksek | Same-product precondition açıkça çözülsün ya da test bloklansın |
