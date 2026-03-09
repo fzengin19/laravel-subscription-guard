@@ -63,9 +63,13 @@ This distinction must be explicit in product, support, and accounting workflows.
 
 ```bash
 composer test
+composer test-live
 composer analyse
 composer format -- --test
 ```
+
+- `composer test` runs the deterministic suite only.
+- `composer test-live` runs the isolated iyzico sandbox suite under `tests/Live`.
 
 ## Documentation
 
