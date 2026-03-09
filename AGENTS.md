@@ -118,7 +118,7 @@ Bir faz tamamlandığında:
 | 5. Integration & Testing | 4 hafta | Bitti | [plan.md](phase-5-integration-testing/plan.md) |
 | 6. Security Hardening | 3 hafta | Bitti | [plan.md](phase-6-security-hardening/plan.md) |
 | 7. Code Simplification | 3 hafta | Yürütülüyor | [plan.md](phase-7-code-simplification/plan.md) |
-| 8. iyzico Live Sandbox Validation | 3 hafta | Yürütülüyor | [plan.md](phase-8-iyzico-live-sandbox-validation/plan.md) |
+| 8. iyzico Live Sandbox Validation | 3 hafta | Bitti | [plan.md](phase-8-iyzico-live-sandbox-validation/plan.md) |
 
 **Toplam Süre**: 31 hafta
 
@@ -244,3 +244,4 @@ php artisan subscription-guard:simulate-webhook iyzico payment.success
 ### 2026-03-09
 - Faz dizini ve durum tablosu Faz 6-8 ile hizalandı
 - Plan durum standardı `Planlama/Yürütülüyor/Bitti` olarak netleştirildi
+- Faz 8 live sandbox isolation ve runtime sahipliği tamamlandı

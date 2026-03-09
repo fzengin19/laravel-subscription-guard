@@ -277,7 +277,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 **Çıktılar**:
 - `phpunit.live.xml.dist` ile ayrık live test config'i
-- `tests/Live/Iyzico/*` ve `tests/Support/Live/*` altında live sandbox validation katmanı
+- `tests/Live/*` ve `tests/Support/Live/*` altında live sandbox validation katmanı
 - Faz 8 work-results ve risk-notes şablonları
 - Live test çalıştırma ve gizli bilgi yönetimi için netleştirilmiş dokümantasyon/config kuralları
 
