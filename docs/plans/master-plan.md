@@ -2,7 +2,7 @@
 
 > **Versiyon**: 3.2 (Yol Haritası)
 > **Tarih**: 2026-03-09
-> **Durum**: Execution in Progress (Faz 1-6 tamamlandı, Faz 7 yürütülüyor, Faz 8 başlatıldı)
+> **Durum**: Execution in Progress (Faz 1-8 tamamlandı)
 
 ---
 
@@ -250,7 +250,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 7: Code Simplification & Readability Hardening (3 Hafta)
 **Detaylı Plan**: `phase-7-code-simplification/plan.md`
-**Durum**: Yürütülüyor (2026-03-05)
+**Durum**: Tamamlandı (2026-03-09)
 
 **Kapsam**:
 - Davranış değiştirmeden kod sadeleştirme ve okunabilirlik iyileştirmesi
@@ -267,7 +267,7 @@ Bu adım tamamlanmadan migration/model implementasyonuna başlanmaz.
 
 ### Faz 8: iyzico Live Sandbox Validation & External Test Isolation (3 Hafta)
 **Detaylı Plan**: `phase-8-iyzico-live-sandbox-validation/plan.md`
-**Durum**: Yürütülüyor (2026-03-09)
+**Durum**: Tamamlandı (2026-03-09)
 
 **Kapsam**:
 - Deterministic suite'i bozmadan ayrı bir iyzico live sandbox testsuite kurma

@@ -44,7 +44,8 @@ it('reconciles a remote iyzico subscription into local status', function (): voi
 
     $plan->refresh();
 
-    $payload = IyzicoSandboxFixtures::subscriptionPayload('success_debit_tr', $context, $userId);
+    $payload = IyzicoSandboxFixtures::subscriptionPayload('success_credit_tr', $context, $userId);
+    $payload['subscription_initial_status'] = 'ACTIVE';
     $response = IyzicoSandboxGate::runWithTransientRetry(fn () => $provider->createSubscription($plan->toArray(), $payload));
 
     if (is_string($response->subscriptionId) && $response->subscriptionId !== '') {

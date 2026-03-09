@@ -141,11 +141,25 @@ final class IyzicoSandboxGate
                     }
                 }
             }
+
+            foreach (['failureReason'] as $property) {
+                if (isset($subject->{$property}) && is_scalar($subject->{$property})) {
+                    $haystacks[] = (string) $subject->{$property};
+                }
+            }
+
+            if (isset($subject->providerResponse) && is_array($subject->providerResponse)) {
+                foreach (['errorMessage', 'message', 'error', 'status', 'code'] as $key) {
+                    if (isset($subject->providerResponse[$key]) && is_scalar($subject->providerResponse[$key])) {
+                        $haystacks[] = (string) $subject->providerResponse[$key];
+                    }
+                }
+            }
         }
 
         $message = strtolower(implode(' ', $haystacks));
 
-        foreach (['500', '503', 'rate limit', 'too many requests', 'service unavailable', 'temporarily unavailable', 'timeout'] as $needle) {
+        foreach (['500', '503', 'rate limit', 'too many requests', 'service unavailable', 'temporarily unavailable', 'timeout', 'system error', 'sistem hatası'] as $needle) {
             if (str_contains($message, $needle)) {
                 return true;
             }

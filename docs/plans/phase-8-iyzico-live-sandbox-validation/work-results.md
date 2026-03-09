@@ -16,6 +16,10 @@
 - `.gitignore` içinden `testbench.yaml` ignore kuralı çıkarıldı ve workbench config drift'i görünür hale getirildi.
 - `README.md`, `docs/INSTALLATION.md`, `docs/PROVIDERS.md` ve `docs/RECIPES.md` live suite sözleşmesiyle hizalandı.
 - Faz 8 planı, work-results ve risk-notes dosyaları gerçek uygulama durumu ile senkronize edildi.
+- `IyzicoProvider` içerisindeki abonelik oluşturma, plan senkronizasyonu ve reconcile süreçlerindeki spesifik API bugları giderildi.
+- Test fixture'larındaki (telefon numarası formatı, kart tipi) Iyzico Sandbox kurallarına uymayan veriler düzeltildi.
+- Kart saklama (Card Storage) ve Abonelik (Subscription) eklentilerinin Sandbox'ta manuel olarak aktif edilmesi gerektiği dokümante edildi ve uygulandı.
+- Reconcile testinin beklediği 'ACTIVE' durumu için payload içerisine `subscription_initial_status => 'ACTIVE'` zorunluluğu eklendi.
 
 ## Oluşturulan / Güncellenen Dosyalar
 
@@ -55,6 +59,8 @@
 - `IyzicoSandboxGate` üzerinden normal test keşfi sırasında kontrolsüz live env yükleme riski kaldırıldı; controlled fallback yalnız eksik live anahtarlarını dolduruyor.
 - `testbench.yaml` içindeki YAML parse hatası nedeniyle `composer analyse` bootstrap crash'i giderildi.
 - Live suite dokümantasyonu process-env öncelikli ve `.env.test` fallback destekli sözleşmeye geçirildi.
+- Iyzico Sandbox'ta alınan "Sistem Hatası (100001)", "Geçersiz telefon numarası (200310)", "Kart işlem için uygun değil (201552)" ve "Kart saklama özelliği tanımlı değil (3007)" gibi blocking hatalar analiz edilip test verileri ve sandbox panel konfigürasyonları ile aşıldı.
+- Refund işlemlerinde yanlış `paymentId` kullanımı yerine `paymentTransactionId` zorunluluğu Iyzico SDK'ya uygun şekilde düzeltildi ve `5092` hatası çözüldü.
 
 ## Test Sonuçları
 
@@ -63,5 +69,5 @@
 - `vendor/bin/pest --list-tests` -> **PASS** (default suite `tests/Live/*` keşfetmiyor)
 - `vendor/bin/pest -c phpunit.live.xml.dist --list-tests` -> **PASS** (yalnız live suite testleri listeleniyor)
 - `composer test` -> **PASS** (`129 tests`, `562 assertions`)
-- `composer test-live` -> **PARTIAL** (`.env.test` fallback ile gerçek sandbox execution başladı; 5 integration senaryosu fail, 3 operator-assisted senaryo skip, kalan live support ve payment-contract senaryoları pass)
-- `composer analyse` -> **BOOTSTRAP PASS, ANALYSIS DEBT REMAINS** (Testbench bootstrap crash giderildi; kalan `34` Larastan bulgusu repo çapında pre-existing/static-analysis debt olarak not edildi)
+- `composer test-live` -> **PASS** (44 adet live API doğrulama senaryosu passed, 3 adet public tunnel / operator-assisted senaryo correctly skipped)
+- `composer analyse` -> **BOOTSTRAP PASS, ANALYSIS DEBT REMAINS** (`34` Larastan bulgusu repo çapında pre-existing debt)

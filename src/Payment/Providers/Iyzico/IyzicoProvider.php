@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico;
 
 use Iyzipay\Model\Address;
+use Iyzipay\Model\AmountBaseRefund;
 use Iyzipay\Model\Buyer;
 use Iyzipay\Model\CheckoutFormInitialize;
 use Iyzipay\Model\Customer;
@@ -15,6 +16,7 @@ use Iyzipay\Model\Subscription\SubscriptionCancel;
 use Iyzipay\Model\Subscription\SubscriptionCreate;
 use Iyzipay\Model\Subscription\SubscriptionUpgrade;
 use Iyzipay\Options as IyzipayOptions;
+use Iyzipay\Request\AmountBaseRefundRequest;
 use Iyzipay\Request\CreateCheckoutFormInitializeRequest;
 use Iyzipay\Request\CreatePaymentRequest;
 use Iyzipay\Request\CreateRefundRequest;
@@ -143,6 +145,12 @@ final class IyzicoProvider implements PaymentProviderInterface
                 $payload = $this->decodeRawPayload($response);
 
                 if (! $this->isSuccessfulResponse($response)) {
+                    $fallbackResponse = $this->refundByPaymentId($transactionId, $amount);
+
+                    if ($fallbackResponse !== null && $fallbackResponse->success) {
+                        return $fallbackResponse;
+                    }
+
                     return new RefundResponse(false, null, $payload, $this->responseError($response, 'Iyzico refund failed.'));
                 }
 
@@ -155,6 +163,30 @@ final class IyzicoProvider implements PaymentProviderInterface
         }
 
         return new RefundResponse(true, 'rf_'.sha1($transactionId.':'.(string) $amount), ['transaction_id' => $transactionId, 'amount' => (float) $amount]);
+    }
+
+    private function refundByPaymentId(string $paymentId, int|float|string $amount): ?RefundResponse
+    {
+        if ($paymentId === '') {
+            return null;
+        }
+
+        $request = new AmountBaseRefundRequest;
+        $request->setConversationId(uniqid('iyz_amount_ref_', true));
+        $request->setPaymentId($paymentId);
+        $request->setPrice((float) $this->money($amount));
+        $request->setIp('127.0.0.1');
+
+        $response = AmountBaseRefund::create($request, $this->options());
+        $payload = $this->decodeRawPayload($response);
+
+        if (! $this->isSuccessfulResponse($response)) {
+            return new RefundResponse(false, null, $payload, $this->responseError($response, 'Iyzico amount-based refund failed.'));
+        }
+
+        $refundId = is_scalar($payload['paymentId'] ?? null) ? (string) $payload['paymentId'] : $paymentId;
+
+        return new RefundResponse(true, $refundId, $payload);
     }
 
     public function createSubscription(array $plan, array $details): SubscriptionResponse
@@ -178,7 +210,7 @@ final class IyzicoProvider implements PaymentProviderInterface
                 $request = new SubscriptionCreateRequest;
                 $request->setConversationId((string) ($details['conversation_id'] ?? uniqid('iyz_sub_', true)));
                 $request->setPricingPlanReferenceCode($pricingPlanReference);
-                $request->setSubscriptionInitialStatus((string) ($details['subscription_initial_status'] ?? 'ACTIVE'));
+                $request->setSubscriptionInitialStatus((string) ($details['subscription_initial_status'] ?? 'PENDING'));
                 $request->setPaymentCard($this->subscriptionPaymentCard($details));
                 $request->setCustomer($this->customer($details));
 
@@ -484,9 +516,10 @@ final class IyzicoProvider implements PaymentProviderInterface
         }
 
         $paymentId = method_exists($response, 'getPaymentId') ? (string) $response->getPaymentId() : null;
+        $transactionId = $this->support->refundableTransactionId($payload, (string) $paymentId);
         $redirectUrl = $mode === '3ds' && is_scalar($payload['threeDSHtmlContent'] ?? null) ? (string) $payload['threeDSHtmlContent'] : null;
 
-        return new PaymentResponse(true, $paymentId, $redirectUrl, null, null, $payload);
+        return new PaymentResponse(true, $transactionId, $redirectUrl, null, null, $payload);
     }
 
     private function options(): IyzipayOptions

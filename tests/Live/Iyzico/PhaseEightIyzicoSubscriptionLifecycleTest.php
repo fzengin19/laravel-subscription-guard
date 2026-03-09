@@ -33,7 +33,7 @@ it('creates a remote subscription and persists local payment method tokens', fun
 
     $plan->refresh();
 
-    $payload = IyzicoSandboxFixtures::subscriptionPayload('success_debit_tr', $context, $userId);
+    $payload = IyzicoSandboxFixtures::subscriptionPayload('success_credit_tr', $context, $userId);
     $response = IyzicoSandboxGate::runWithTransientRetry(fn () => $provider->createSubscription($plan->toArray(), $payload));
 
     if (is_string($response->subscriptionId) && $response->subscriptionId !== '') {

@@ -125,7 +125,7 @@ final class SyncPlansCommand extends Command
                 $response = SubscriptionProduct::create($request, $this->iyzicoOptions());
 
                 if (! $this->isSuccessful($response)) {
-                    throw new \RuntimeException($this->responseError($response, 'Unable to create remote iyzico product.'));
+                    throw new \RuntimeException($this->remoteSyncError($response, 'Unable to create remote iyzico product.'));
                 }
 
                 $productReference = (string) $response->getReferenceCode();
@@ -144,14 +144,24 @@ final class SyncPlansCommand extends Command
                 $request->setCurrencyCode((string) $plan->getAttribute('currency'));
                 $request->setPaymentInterval($this->mapPaymentInterval((string) $plan->getAttribute('billing_period')));
                 $request->setPaymentIntervalCount((int) $plan->getAttribute('billing_interval'));
-                $request->setTrialPeriodDays((int) ($plan->getAttribute('trial_days') ?? 0));
                 $request->setPlanPaymentType('RECURRING');
-                $request->setRecurrenceCount(0);
+
+                $trialDays = (int) ($plan->getAttribute('trial_days') ?? 0);
+
+                if ($trialDays > 0) {
+                    $request->setTrialPeriodDays($trialDays);
+                }
+
+                $recurrenceCount = (int) ($plan->getAttribute('recurrence_count') ?? 0);
+
+                if ($recurrenceCount > 0) {
+                    $request->setRecurrenceCount($recurrenceCount);
+                }
 
                 $response = SubscriptionPricingPlan::create($request, $this->iyzicoOptions());
 
                 if (! $this->isSuccessful($response)) {
-                    throw new \RuntimeException($this->responseError($response, 'Unable to create remote iyzico pricing plan.'));
+                    throw new \RuntimeException($this->remoteSyncError($response, 'Unable to create remote iyzico pricing plan.'));
                 }
 
                 $pricingReference = (string) $response->getReferenceCode();
@@ -226,6 +236,47 @@ final class SyncPlansCommand extends Command
         }
 
         return $fallback;
+    }
+
+    private function remoteSyncError(object $response, string $fallback): string
+    {
+        $message = $this->responseError($response, $fallback);
+
+        if ($message !== $fallback) {
+            $message = $fallback.' '.$message;
+        }
+
+        $payload = $this->decodeRawPayload($response);
+        $details = [];
+
+        foreach (['errorCode', 'errorMessage', 'systemTime', 'conversationId'] as $key) {
+            if (isset($payload[$key]) && is_scalar($payload[$key])) {
+                $details[] = $key.'='.(string) $payload[$key];
+            }
+        }
+
+        if ($details === []) {
+            return $message;
+        }
+
+        return $message.' ['.implode(', ', $details).']';
+    }
+
+    private function decodeRawPayload(object $response): array
+    {
+        if (! method_exists($response, 'getRawResult')) {
+            return [];
+        }
+
+        $raw = $response->getRawResult();
+
+        if (! is_string($raw) || $raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
     }
 
     private function mapPaymentInterval(string $period): string

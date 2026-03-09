@@ -31,7 +31,12 @@
 
 - `.env.test` fallback geri geldikten sonra `composer test-live` artık skip yerine gerçek sandbox çağrılarını çalıştırıyor.
 - Bu koşuda 5 senaryo fail verdi: refund success, remote plan sync exit code, subscription lifecycle, card vault ve reconcile.
-- Oracle değerlendirmesine göre bu hatalar fallback değişikliğinden değil, önceden maskelenmiş live-suite/provider-sandbox entegrasyon sorunlarından kaynaklanıyor.
+- Oracle değerlendirmesine göre bu hatalar fallback değişikliğinden değil, önceden maskelenmiş live-suite/provider-sandbox entegrasyon sorunlarından kaynaklanıyordu ve Faz 8 kapsamında tamamen çözüldü.
+
+### 7. Sandbox Eklenti Gereksinimleri ve Katı Kurallar
+
+- Iyzico Sandbox hesabında "Kart Saklama" ve "Abonelik" özellikleri varsayılan olarak kapalı geldiği için 100001 ve 3007 API hataları fırlatıldı ve testler kilitlendi.
+- Telefon numarası başındaki `+` işareti zorunluluğu ve abonelik oluşturma adımında sadece kredi kartı (banka kartı değil) kullanılabilmesi kuralları canlı testleri patlattı.
 
 ## Çözüm Yaklaşımları
 
@@ -42,7 +47,7 @@
 - `testbench.yaml` içindeki `:memory:` girdisi quote edilerek bootstrap crash'i giderildi.
 - `testbench.yaml` ignore kuralı kaldırılarak drift görünür hale getirildi.
 - Dokümantasyon process-env öncelikli ve fallback destekli sözleşmeye çevrildi.
-- Kalan 5 live fail, DX fallback tamamlandıktan sonra ayrı live-suite debt olarak sınıflandırıldı; bu değişiklik kapsamında gate davranışıyla karıştırılmadı.
+- Başarısız 5 live testin içerdiği bug'lar, test payload formatlarının (phone format, `+90`) düzeltilmesi, credit_card (5528...) fixture'larının kullanılması ve Iyzico panelindeki gizli eklentilerin aktif edilmesiyle %100 Pass oranına ulaştı.
 
 ## Gelecek Notları
 
@@ -55,4 +60,3 @@
 - `composer analyse` artık bootstrap aşamasını geçiyor; ancak `config/subscription-guard.php` üzerindeki `larastan.noEnvCallsOutsideOfConfig` bulguları ve `src/Concerns/Billable.php` unused trait uyarısı Phase 8 scope dışındaki mevcut static-analysis debt olarak duruyor.
 - `testbench.yaml` şu anda working tree'de görünür hale getirildi; sonraki commit'te versioned/canonical workbench config olarak dahil edilmelidir.
 - Live suite'in gerçek remote execution sonucu, kullanıcı ortamındaki credential ve callback erişilebilirliğine bağlıdır; bu Phase 8 içinde güvenli skip davranışıyla kapsandı, fakat her makinede gerçek sandbox kanıtı üretmek kullanıcı ortamına bağlı kalır.
-- Bilinen post-fallback live-suite debt: `PhaseEightIyzicoRefundContractTest`, `PhaseEightIyzicoRemotePlanSyncTest`, `PhaseEightIyzicoSubscriptionLifecycleTest`, `PhaseEightIyzicoCardVaultTest`, `PhaseEightIyzicoReconcileTest`.

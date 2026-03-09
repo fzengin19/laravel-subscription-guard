@@ -43,7 +43,7 @@ it('lists and deletes stored cards after tokenization', function (): void {
 
     $plan->refresh();
 
-    $payload = IyzicoSandboxFixtures::subscriptionPayload('success_debit_tr', $context, $userId);
+    $payload = IyzicoSandboxFixtures::subscriptionPayload('success_credit_tr', $context, $userId);
     $response = IyzicoSandboxGate::runWithTransientRetry(fn () => $provider->createSubscription($plan->toArray(), $payload));
 
     if (is_string($response->subscriptionId) && $response->subscriptionId !== '') {
@@ -61,6 +61,7 @@ it('lists and deletes stored cards after tokenization', function (): void {
     try {
         $storedCards = $provider->listStoredCards($customerToken);
         $deleted = $provider->deleteStoredCard($customerToken, $cardToken);
+
 
         expect($response->success)->toBeTrue()
             ->and($customerToken)->not->toBe('')

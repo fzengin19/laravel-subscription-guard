@@ -46,8 +46,8 @@ final class IyzicoRequestBuilder
             'expireYear' => (string) ($cardData['expire_year'] ?? $cardData['expiry_year'] ?? ''),
             'expireMonth' => (string) ($cardData['expire_month'] ?? $cardData['expiry_month'] ?? ''),
             'cvc' => (string) ($cardData['cvc'] ?? ''),
-            'registerCard' => (int) ($cardData['register_card'] ?? 0),
-            'cardAlias' => (string) ($cardData['card_alias'] ?? ''),
+            'registerCard' => (int) ($cardData['register_card'] ?? 1),
+            'cardAlias' => (string) ($cardData['card_alias'] ?? $cardData['card_holder_name'] ?? 'Subscription Card'),
             'cardUserKey' => (string) ($cardData['card_user_key'] ?? ''),
         ];
     }

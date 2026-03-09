@@ -117,7 +117,7 @@ Bir faz tamamlandığında:
 | 4.1. Implementation Closure | 2 hafta | Bitti | [plan.md](phase-4-1-implementation-closure/plan.md) |
 | 5. Integration & Testing | 4 hafta | Bitti | [plan.md](phase-5-integration-testing/plan.md) |
 | 6. Security Hardening | 3 hafta | Bitti | [plan.md](phase-6-security-hardening/plan.md) |
-| 7. Code Simplification | 3 hafta | Yürütülüyor | [plan.md](phase-7-code-simplification/plan.md) |
+| 7. Code Simplification | 3 hafta | Bitti | [plan.md](phase-7-code-simplification/plan.md) |
 | 8. iyzico Live Sandbox Validation | 3 hafta | Bitti | [plan.md](phase-8-iyzico-live-sandbox-validation/plan.md) |
 
 **Toplam Süre**: 31 hafta

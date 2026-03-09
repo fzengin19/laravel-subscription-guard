@@ -61,8 +61,8 @@ it('reruns remote sync idempotently when references already exist', function ():
 function phaseEightCreateIyzicoRemotePlan(IyzicoSandboxRunContext $context, string $suffix, float $price): Plan
 {
     return Plan::query()->create([
-        'name' => sprintf('Phase Eight %s %s', ucfirst($suffix), $context->runId()),
-        'slug' => $context->scopedValue($suffix),
+        'name' => sprintf('P8 %s %s', ucfirst($suffix), substr($context->runId(), -6)),
+        'slug' => 'p8-'.$context->scopedValue($suffix),
         'price' => $price,
         'currency' => 'TRY',
         'billing_period' => 'monthly',
