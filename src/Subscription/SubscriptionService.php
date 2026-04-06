@@ -205,12 +205,8 @@ final class SubscriptionService implements SubscriptionServiceInterface
 
         $transactions = Transaction::query()
             ->whereIn('status', ['failed', 'retrying'])
-            ->where(function ($query) use ($formattedDate, $maxRetries) {
-                $query->where(function ($q) use ($formattedDate) {
-                    $q->whereNotNull('next_retry_at')
-                        ->where('next_retry_at', '<=', $formattedDate);
-                })->orWhere('retry_count', '>=', $maxRetries);
-            })
+            ->whereNotNull('next_retry_at')
+            ->where('next_retry_at', '<=', $formattedDate)
             ->get();
 
         foreach ($transactions as $transaction) {
