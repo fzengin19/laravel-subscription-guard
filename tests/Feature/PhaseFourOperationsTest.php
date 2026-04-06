@@ -204,7 +204,8 @@ it('processes metered billing and resets period usage', function (): void {
 
     expect($transaction)->not->toBeNull();
     expect((float) $transaction->getAttribute('amount'))->toBe(20.0);
-    expect(LicenseUsage::query()->where('license_id', $license->getKey())->count())->toBe(0);
+    expect(LicenseUsage::query()->where('license_id', $license->getKey())->whereNull('billed_at')->count())->toBe(0);
+    expect(LicenseUsage::query()->where('license_id', $license->getKey())->whereNotNull('billed_at')->count())->toBe(1);
 });
 
 it('processes metered billing through provider charge in self-managed flow', function (): void {
@@ -262,7 +263,8 @@ it('processes metered billing through provider charge in self-managed flow', fun
     expect((string) $transaction?->getAttribute('status'))->toBe('processed');
     expect((string) ($transaction?->getAttribute('provider_transaction_id') ?? ''))->not->toBe('');
     expect((bool) (($transaction?->getAttribute('provider_response')['charge_success'] ?? false)))->toBeTrue();
-    expect(LicenseUsage::query()->where('license_id', $license->getKey())->count())->toBe(0);
+    expect(LicenseUsage::query()->where('license_id', $license->getKey())->whereNull('billed_at')->count())->toBe(0);
+    expect(LicenseUsage::query()->where('license_id', $license->getKey())->whereNotNull('billed_at')->count())->toBe(1);
 });
 
 it('keeps usage and marks transaction failed when metered provider charge fails', function (): void {

@@ -61,6 +61,7 @@ final class MeteredBillingProcessor
                     ->where('license_id', (int) $licenseId)
                     ->where('period_start', '>=', $periodStart)
                     ->where('period_start', '<=', $periodEnd)
+                    ->whereNull('billed_at')
                     ->lockForUpdate();
 
                 $totalUsage = (float) $usageQuery->sum('quantity');
@@ -149,7 +150,7 @@ final class MeteredBillingProcessor
 
                 $transaction->markProcessed($providerTransactionId, $providerResponse, true);
 
-                $usageQuery->delete();
+                $usageQuery->update(['billed_at' => now()]);
 
                 $locked->setAttribute('current_period_start', $periodEnd->copy());
                 $locked->setAttribute('current_period_end', $this->nextPeriodEnd($periodEnd, $locked));

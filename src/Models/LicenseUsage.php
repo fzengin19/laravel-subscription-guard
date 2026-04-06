@@ -17,6 +17,7 @@ class LicenseUsage extends Model
             'metadata' => 'array',
             'period_start' => 'datetime',
             'period_end' => 'datetime',
+            'billed_at' => 'datetime',
         ];
     }
 
