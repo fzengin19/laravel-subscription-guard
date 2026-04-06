@@ -422,9 +422,19 @@ final class SubscriptionService implements SubscriptionServiceInterface
             $anchor = is_numeric($anchorDay) ? (int) $anchorDay : null;
 
             if ($nextBillingDate instanceof Carbon) {
-                $subscription->setAttribute('next_billing_date', $this->advanceBillingDate($nextBillingDate, $anchor));
+                $subscription->setAttribute('next_billing_date', $this->advanceBillingDate(
+                    $nextBillingDate,
+                    $anchor,
+                    (string) $subscription->getAttribute('billing_period'),
+                    max(1, (int) $subscription->getAttribute('billing_interval')),
+                ));
             } else {
-                $subscription->setAttribute('next_billing_date', $this->advanceBillingDate(now(), $anchor));
+                $subscription->setAttribute('next_billing_date', $this->advanceBillingDate(
+                    now(),
+                    $anchor,
+                    (string) $subscription->getAttribute('billing_period'),
+                    max(1, (int) $subscription->getAttribute('billing_interval')),
+                ));
             }
 
             $subscription->save();
@@ -584,9 +594,19 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 $anchor = is_numeric($anchorDay) ? (int) $anchorDay : null;
 
                 if ($nextBillingDate instanceof Carbon) {
-                    $subscription->setAttribute('next_billing_date', $this->advanceBillingDate($nextBillingDate, $anchor));
+                    $subscription->setAttribute('next_billing_date', $this->advanceBillingDate(
+                        $nextBillingDate,
+                        $anchor,
+                        (string) $subscription->getAttribute('billing_period'),
+                        max(1, (int) $subscription->getAttribute('billing_interval')),
+                    ));
                 } else {
-                    $subscription->setAttribute('next_billing_date', $this->advanceBillingDate(now(), $anchor));
+                    $subscription->setAttribute('next_billing_date', $this->advanceBillingDate(
+                        now(),
+                        $anchor,
+                        (string) $subscription->getAttribute('billing_period'),
+                        max(1, (int) $subscription->getAttribute('billing_interval')),
+                    ));
                 }
             }
 
@@ -632,13 +652,26 @@ final class SubscriptionService implements SubscriptionServiceInterface
         return (string) config('subscription-guard.billing.timezone', 'Europe/Istanbul');
     }
 
-    private function advanceBillingDate(Carbon $currentDate, ?int $anchorDay = null): Carbon
+    private function advanceBillingDate(Carbon $currentDate, ?int $anchorDay = null, string $billingPeriod = 'month', int $billingInterval = 1): Carbon
     {
-        if ($anchorDay === null || $anchorDay < 1 || $anchorDay > 31) {
-            $anchorDay = $currentDate->day;
+        $interval = max(1, $billingInterval);
+        $next = $currentDate->copy();
+
+        return match ($billingPeriod) {
+            'day', 'daily' => $next->addDays($interval),
+            'week', 'weekly' => $next->addWeeks($interval),
+            'year', 'yearly', 'annual' => $next->addYears($interval),
+            default => $this->advanceMonthly($next, $interval, $anchorDay ?? $currentDate->day),
+        };
+    }
+
+    private function advanceMonthly(Carbon $date, int $interval, int $anchorDay): Carbon
+    {
+        if ($anchorDay < 1 || $anchorDay > 31) {
+            $anchorDay = $date->day;
         }
 
-        $next = $currentDate->copy()->addMonthNoOverflow();
+        $next = $date->addMonthsNoOverflow($interval);
         $maxDay = $next->daysInMonth;
         $next->day = min($anchorDay, $maxDay);
 
