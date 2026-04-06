@@ -120,9 +120,8 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
                     return;
                 }
 
-                if (is_numeric($resolvedDiscount['discount_id'])) {
-                    $subscriptionService->markDiscountApplied((int) $resolvedDiscount['discount_id']);
-                }
+                // Discount cycle is marked as applied in PaymentChargeJob on successful charge,
+                // not here, to avoid burning cycles when the charge fails.
 
                 PaymentChargeJob::dispatch((int) $transaction->getKey())
                     ->onQueue($paymentManager->queueName('queue', 'subguard-main'));

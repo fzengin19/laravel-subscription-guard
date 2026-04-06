@@ -10,8 +10,11 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
-use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Event;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Events\PaymentCompleted;
+use SubscriptionGuard\LaravelSubscriptionGuard\Events\SubscriptionRenewed;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
@@ -81,16 +84,39 @@ final class PaymentChargeJob implements ShouldQueue
                         true,
                     );
 
-                    $subscriptionService->handlePaymentResult(new PaymentResponse(
-                        success: true,
-                        transactionId: $response->transactionId,
-                        providerResponse: $response->providerResponse,
-                    ), $subscription);
+                    $amount = (float) $transaction->getAttribute('amount');
+
+                    $subscription->setAttribute('status', SubscriptionStatus::Active->value);
+                    $subscription->setAttribute('grace_ends_at', null);
+
+                    $nextBillingDate = $subscription->getAttribute('next_billing_date');
+                    $anchorDay = $subscription->getAttribute('billing_anchor_day');
+                    $anchor = is_numeric($anchorDay) ? (int) $anchorDay : null;
+
+                    if ($nextBillingDate instanceof Carbon) {
+                        $next = $nextBillingDate->copy()->addMonthNoOverflow();
+                        if ($anchor !== null && $anchor >= 1 && $anchor <= 31) {
+                            $next->day = min($anchor, $next->daysInMonth);
+                        }
+                        $subscription->setAttribute('next_billing_date', $next);
+                    } else {
+                        $subscription->setAttribute('next_billing_date', now()->addMonth());
+                    }
+
+                    $subscription->save();
+
+                    if (is_numeric($transaction->getAttribute('discount_id'))) {
+                        $subscriptionService->markDiscountApplied((int) $transaction->getAttribute('discount_id'));
+                    }
+
+                    Event::dispatch(new PaymentCompleted($provider, $subscription->getKey(), $transaction->getKey(), $amount, $response->transactionId, $response->providerResponse));
+                    Event::dispatch(new SubscriptionRenewed($provider, (string) $subscription->getAttribute('provider_subscription_id'), $subscription->getKey(), $amount, $response->transactionId, $response->providerResponse));
 
                     DispatchBillingNotificationsJob::dispatch('payment.completed', [
                         'transaction_id' => $transaction->getKey(),
                         'subscription_id' => $subscription->getKey(),
                         'provider' => $provider,
+                        'amount' => $amount,
                     ])->onQueue($paymentManager->queueName('notifications_queue', 'subguard-notifications'));
 
                     return;
