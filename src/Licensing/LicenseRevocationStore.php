@@ -4,6 +4,9 @@ declare(strict_types=1);
 
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Licensing;
 
+use Illuminate\Support\Facades\Log;
+use Throwable;
+
 final class LicenseRevocationStore
 {
     public function applyFullSnapshot(int $sequence, array $revokedLicenseIds, int $ttlSeconds): bool
@@ -73,10 +76,30 @@ final class LicenseRevocationStore
             return false;
         }
 
-        $state = $this->state();
+        try {
+            $state = $this->state();
+        } catch (Throwable $e) {
+            Log::channel(
+                (string) config('subscription-guard.logging.licenses_channel', 'subguard_licenses')
+            )->error('License revocation cache unreachable', [
+                'license_id' => $licenseId,
+                'error' => $e->getMessage(),
+            ]);
 
-        if ((int) $state['expires_at'] < time()) {
-            return ! (bool) config('subscription-guard.license.revocation.fail_open_on_expired', true);
+            return ! (bool) config('subscription-guard.license.revocation.fail_open_on_expired', false);
+        }
+
+        $expiresAt = (int) $state['expires_at'];
+        $sequence = (int) $state['sequence'];
+
+        // Store hiç populate edilmemişse revoke edilmiş lisans olamaz
+        if ($sequence === 0 && $expiresAt === 0) {
+            return false;
+        }
+
+        // Store populate edilmiş ama expire olmuşsa config'e göre karar ver
+        if ($expiresAt < time()) {
+            return ! (bool) config('subscription-guard.license.revocation.fail_open_on_expired', false);
         }
 
         return (bool) (($state['revoked'][$licenseId] ?? false) === true);
@@ -109,10 +132,10 @@ final class LicenseRevocationStore
 
     private function withLock(callable $callback): bool
     {
-        $lock = cache()->lock($this->cacheKey().':lock', 5);
+        $lock = cache()->lock($this->cacheKey().':lock', 10);
 
         try {
-            return (bool) $lock->block(3, $callback);
+            return (bool) $lock->block(5, $callback);
         } finally {
             try {
                 $lock->release();
