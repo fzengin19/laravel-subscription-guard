@@ -73,7 +73,12 @@ final class SubscriptionService implements SubscriptionServiceInterface
             return false;
         }
 
-        $subscription->setAttribute('status', SubscriptionStatus::Cancelled->value);
+        try {
+            $subscription->transitionTo(SubscriptionStatus::Cancelled);
+        } catch (SubGuardException) {
+            return false;
+        }
+
         $subscription->setAttribute('cancelled_at', now());
 
         return $subscription->save();
@@ -87,7 +92,11 @@ final class SubscriptionService implements SubscriptionServiceInterface
             return false;
         }
 
-        $subscription->setAttribute('status', SubscriptionStatus::Paused->value);
+        try {
+            $subscription->transitionTo(SubscriptionStatus::Paused);
+        } catch (SubGuardException) {
+            return false;
+        }
 
         return $subscription->save();
     }
@@ -100,7 +109,12 @@ final class SubscriptionService implements SubscriptionServiceInterface
             return false;
         }
 
-        $subscription->setAttribute('status', SubscriptionStatus::Active->value);
+        try {
+            $subscription->transitionTo(SubscriptionStatus::Active);
+        } catch (SubGuardException) {
+            return false;
+        }
+
         $subscription->setAttribute('resumes_at', null);
 
         return $subscription->save();
