@@ -29,6 +29,9 @@ _ide_helper_models.php
 phpunit.xml
 phpstan.neon
 /docs/*
+!/docs/*.md
+!/docs/*/
+!/docs/*/*.md
 !/docs/plans/
 !/docs/plans/**
 /coverage

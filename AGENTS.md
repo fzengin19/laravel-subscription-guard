@@ -19,8 +19,13 @@ Laravel için ödeme entegrasyonu (iyzico + PayTR) ve lisans yönetimi içeren m
 ```
 docs/plans/
 ├── master-plan.md                    # Ana yol haritası (kod YOK)
+├── documentation-master-plan.md      # Dokümantasyon yol haritası (kod YOK)
 ├── _archive/                         # Eski planlar
 │   └── 2026-03-03-master-plan-v1.2-full.md
+├── phase-0-documentation-baseline-and-governance/
+│   ├── plan.md
+│   ├── work-results.md
+│   └── risk-notes.md
 ├── phase-1-core-infrastructure/
 │   ├── plan.md                       # Detaylı faz planı
 │   ├── work-results.md               # [FAZ SONRASI] Yapılanlar
@@ -58,6 +63,8 @@ docs/plans/
     ├── work-results.md
     └── risk-notes.md
 ```
+
+Not: Yukarıdaki ağaç çekirdek planlama yapısını gösterir. Repo zaman içinde ek dokümantasyon programı dosyaları, yardımcı plan dizinleri veya henüz normalize edilmemiş ileri faz klasörleri içerebilir; bu durumlar ilgili status raporlarında ayrıca izlenir.
 
 ### Planlama Kuralları
 
@@ -185,9 +192,11 @@ Bir faz tamamlandığında:
 | README.md | Kurulum, hızlı başlangıç |
 | docs/INSTALLATION.md | Detaylı kurulum |
 | docs/CONFIGURATION.md | Config seçenekleri |
+| docs/API.md | Route, callback ve komut yüzeyi özeti |
 | docs/PROVIDERS.md | Provider entegrasyonu |
 | docs/LICENSING.md | Lisans sistemi |
 | docs/RECIPES.md | Yaygın senaryolar |
+| docs/DOCUMENTATION-STANDARDS.md | Dokümantasyon kuralları ve source-of-truth disiplini |
 
 ---
 
