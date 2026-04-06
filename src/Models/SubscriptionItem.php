@@ -11,6 +11,14 @@ class SubscriptionItem extends Model
 {
     protected $guarded = ['id'];
 
+    protected function casts(): array
+    {
+        return [
+            'unit_price' => 'float',
+            'quantity' => 'integer',
+        ];
+    }
+
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);

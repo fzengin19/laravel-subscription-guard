@@ -22,6 +22,9 @@ class Invoice extends Model
             'issue_date' => 'date',
             'due_date' => 'date',
             'paid_at' => 'datetime',
+            'subtotal' => 'float',
+            'tax_amount' => 'float',
+            'total_amount' => 'float',
         ];
     }
 

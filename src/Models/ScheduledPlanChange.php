@@ -33,6 +33,7 @@ class ScheduledPlanChange extends Model
             'metadata' => 'array',
             'scheduled_at' => 'datetime',
             'processed_at' => 'datetime',
+            'proration_credit' => 'float',
         ];
     }
 

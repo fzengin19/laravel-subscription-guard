@@ -106,6 +106,13 @@ class Transaction extends Model
             'refunded_at' => 'datetime',
             'next_retry_at' => 'datetime',
             'last_retry_at' => 'datetime',
+            'amount' => 'float',
+            'tax_amount' => 'float',
+            'tax_rate' => 'float',
+            'discount_amount' => 'float',
+            'refunded_amount' => 'float',
+            'fee' => 'float',
+            'exchange_rate' => 'float',
         ];
     }
 

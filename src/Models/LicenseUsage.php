@@ -18,6 +18,7 @@ class LicenseUsage extends Model
             'period_start' => 'datetime',
             'period_end' => 'datetime',
             'billed_at' => 'datetime',
+            'quantity' => 'float',
         ];
     }
 
