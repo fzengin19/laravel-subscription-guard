@@ -70,6 +70,16 @@ final class DiscountService
                 return new DiscountResult(false, 0.0, $couponOrDiscountCode, 'Coupon does not apply to this subscription.');
             }
 
+            $existingDiscount = Discount::query()
+                ->where('coupon_id', $coupon->getKey())
+                ->where('discountable_type', Subscription::class)
+                ->where('discountable_id', $subscription->getKey())
+                ->exists();
+
+            if ($existingDiscount) {
+                return new DiscountResult(false, 0.0, $couponOrDiscountCode, 'This coupon is already applied to this subscription.');
+            }
+
             $discountAmount = $this->computeDiscountAmount($subscriptionAmount, (string) $coupon->getAttribute('type'), (float) $coupon->getAttribute('value'), $coupon);
 
             if ($discountAmount <= 0) {
