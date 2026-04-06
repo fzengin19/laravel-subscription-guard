@@ -84,9 +84,7 @@
             "providers": [
                 "SubscriptionGuard\\LaravelSubscriptionGuard\\LaravelSubscriptionGuardServiceProvider"
             ],
-            "aliases": {
-                "LaravelSubscriptionGuard": "SubscriptionGuard\\LaravelSubscriptionGuard\\Facades\\LaravelSubscriptionGuard"
-            }
+            "aliases": {}
         }
     },
     "minimum-stability": "dev",
