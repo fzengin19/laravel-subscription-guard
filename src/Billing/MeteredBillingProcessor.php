@@ -72,7 +72,12 @@ final class MeteredBillingProcessor
 
                 $metadata = $locked->getAttribute('metadata');
                 $normalizedMetadata = is_array($metadata) ? $metadata : [];
-                $pricePerUnit = max(0.0, (float) ($normalizedMetadata['metered_price_per_unit'] ?? 0.0));
+                $pricePerUnit = (float) ($normalizedMetadata['metered_price_per_unit'] ?? 0.0);
+
+                if ($pricePerUnit <= 0.0) {
+                    return false;
+                }
+
                 $amount = round($totalUsage * $pricePerUnit, 2);
                 $periodToken = $periodEnd->copy()->setTimezone('UTC')->format('YmdHis');
 
