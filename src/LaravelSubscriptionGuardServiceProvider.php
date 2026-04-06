@@ -145,6 +145,14 @@ class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
                 ->by($identifier);
         });
 
+        $webhookRateKey = (string) config('subscription-guard.webhooks.rate_limit.key', 'webhook-intake');
+
+        RateLimiter::for($webhookRateKey, function ($request) {
+            $maxAttempts = (int) config('subscription-guard.webhooks.rate_limit.max_attempts', 120);
+
+            return Limit::perMinute($maxAttempts)->by($request->ip());
+        });
+
         $router = $this->app->make('router');
         $router->aliasMiddleware('subguard.feature', LicenseFeatureMiddleware::class);
         $router->aliasMiddleware('subguard.limit', LicenseLimitMiddleware::class);

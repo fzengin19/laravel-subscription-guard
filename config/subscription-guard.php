@@ -34,7 +34,12 @@ return [
     'webhooks' => [
         'auto_register_routes' => true,
         'prefix' => env('SUBGUARD_WEBHOOK_PREFIX', 'subguard/webhooks'),
-        'middleware' => ['api'],
+        'middleware' => ['api', 'throttle:webhook-intake'],
+        'rate_limit' => [
+            'key' => 'webhook-intake',
+            'max_attempts' => 120,
+            'decay_minutes' => 1,
+        ],
     ],
 
     'queue' => [
