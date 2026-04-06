@@ -88,6 +88,10 @@ final class LicenseManager implements LicenseManagerInterface
             return new ValidationResult(false, 'License heartbeat is stale.', ['payload' => $payload]);
         }
 
+        if ($heartbeatAt > (time() + $clockSkewSeconds)) {
+            return new ValidationResult(false, 'License heartbeat timestamp is in the future.', ['payload' => $payload]);
+        }
+
         return new ValidationResult(true, metadata: ['payload' => $payload]);
     }
 
