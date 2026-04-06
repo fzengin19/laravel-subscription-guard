@@ -183,24 +183,14 @@ it('accepts a valid checkout callback and creates a webhook call', function (): 
 // Empty payload behavior
 // ---------------------------------------------------------------------------
 
-it('does not reject empty payload on callback controller since guard is not present', function (): void {
-    // Note: The FIX-07 empty payload check was added to WebhookController only.
-    // PaymentCallbackController does not have it. In mock mode, validateWebhook
-    // returns true, so an empty payload will be accepted and stored.
+it('rejects empty payload on callback controller', function (): void {
     Bus::fake();
 
     $response = postCallback('iyzico', '3ds/callback', []);
 
-    // Mock mode passes validation; the callback controller proceeds and stores the call.
-    // The event_id will be a SHA-256 hash since there are no identifiable fields.
-    $response->assertStatus(202)->assertJson([
-        'status' => 'accepted',
-        'provider' => 'iyzico',
-    ]);
+    $response->assertStatus(400)->assertJson(['error' => 'Empty payload']);
 
-    expect(WebhookCall::query()->where('event_type', 'payment.3ds.callback')->count())->toBe(1);
-
-    Bus::assertDispatched(FinalizeWebhookEventJob::class, 1);
+    Bus::assertNotDispatched(FinalizeWebhookEventJob::class);
 });
 
 // ---------------------------------------------------------------------------

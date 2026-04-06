@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Http\Controllers;
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use SubscriptionGuard\LaravelSubscriptionGuard\Http\Concerns\ResolvesWebhookEventId;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\FinalizeWebhookEventJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
@@ -40,6 +42,10 @@ final class PaymentCallbackController
 
         $payload = $request->all();
 
+        if ($payload === []) {
+            return response()->json(['error' => 'Empty payload'], 400);
+        }
+
         $providerAdapter = $this->paymentManager->provider($provider);
         $signatureHeader = (string) config('subscription-guard.providers.drivers.'.$provider.'.signature_header', 'x-iyz-signature-v3');
         $signature = (string) $request->header($signatureHeader, '');
@@ -54,10 +60,12 @@ final class PaymentCallbackController
 
         $eventId = $this->resolveEventId($provider, $payload, $eventType, $request->getContent());
 
-        $lock = cache()->lock('subguard:callback:'.$provider.':'.$eventId, 10);
+        $lockTtl = (int) config('subscription-guard.locks.callback_lock_ttl', 10);
+        $blockTimeout = (int) config('subscription-guard.locks.callback_block_timeout', 5);
+        $lock = cache()->lock('subguard:callback:'.$provider.':'.$eventId, $lockTtl);
 
         try {
-            $result = $lock->block(5, function () use ($provider, $eventType, $eventId, $request, $payload): array {
+            $result = $lock->block($blockTimeout, function () use ($provider, $eventType, $eventId, $request, $payload): array {
                 return DB::transaction(function () use ($provider, $eventType, $eventId, $request, $payload): array {
                     $existingCall = WebhookCall::query()
                         ->where('provider', $provider)
@@ -105,6 +113,18 @@ final class PaymentCallbackController
                     ];
                 });
             });
+        } catch (LockTimeoutException) {
+            Log::channel(
+                (string) config('subscription-guard.logging.webhooks_channel', 'subguard_webhooks')
+            )->warning('Callback lock timeout', [
+                'provider' => $provider,
+                'event_id' => $eventId,
+            ]);
+
+            return response()->json([
+                'status' => 'retry',
+                'message' => 'Server busy, please retry',
+            ], 503);
         } finally {
             $lock->release();
         }
