@@ -25,6 +25,8 @@ return [
                 'merchant_salt' => env('PAYTR_MERCHANT_SALT'),
                 'callback_url' => env('PAYTR_CALLBACK_URL'),
                 'mock' => env('PAYTR_MOCK', true),
+                'webhook_response_format' => 'text',
+                'webhook_response_body' => 'OK',
             ],
         ],
     ],
@@ -43,6 +45,11 @@ return [
     ],
 
     'billing' => [
+        'timezone' => env('SUBGUARD_BILLING_TIMEZONE', 'Europe/Istanbul'),
+        'grace_period_days' => (int) env('SUBGUARD_GRACE_PERIOD_DAYS', 7),
+        'max_dunning_retries' => (int) env('SUBGUARD_MAX_DUNNING_RETRIES', 3),
+        'dunning_retry_interval_days' => (int) env('SUBGUARD_DUNNING_RETRY_INTERVAL_DAYS', 2),
+
         'renewal_command' => 'subguard:process-renewals',
         'dunning_command' => 'subguard:process-dunning',
         'suspend_command' => 'subguard:suspend-overdue',
@@ -55,6 +62,15 @@ return [
         'check_license_command' => 'subguard:check-license',
         'sync_license_revocations_command' => 'subguard:sync-license-revocations',
         'sync_license_heartbeats_command' => 'subguard:sync-license-heartbeats',
+    ],
+
+    'locks' => [
+        'webhook_lock_ttl' => (int) env('SUBGUARD_WEBHOOK_LOCK_TTL', 10),
+        'webhook_block_timeout' => (int) env('SUBGUARD_WEBHOOK_BLOCK_TIMEOUT', 5),
+        'callback_lock_ttl' => (int) env('SUBGUARD_CALLBACK_LOCK_TTL', 10),
+        'callback_block_timeout' => (int) env('SUBGUARD_CALLBACK_BLOCK_TIMEOUT', 5),
+        'renewal_job_lock_ttl' => (int) env('SUBGUARD_RENEWAL_JOB_LOCK_TTL', 30),
+        'dunning_job_lock_ttl' => (int) env('SUBGUARD_DUNNING_JOB_LOCK_TTL', 30),
     ],
 
     'logging' => [
@@ -82,7 +98,7 @@ return [
         'revocation' => [
             'cache_key' => env('SUBGUARD_LICENSE_REVOCATION_CACHE_KEY', 'subguard:license:revocation'),
             'snapshot_ttl_seconds' => (int) env('SUBGUARD_LICENSE_REVOCATION_SNAPSHOT_TTL_SECONDS', 604800),
-            'fail_open_on_expired' => (bool) env('SUBGUARD_LICENSE_REVOCATION_FAIL_OPEN_ON_EXPIRED', true),
+            'fail_open_on_expired' => (bool) env('SUBGUARD_LICENSE_REVOCATION_FAIL_OPEN_ON_EXPIRED', false),
             'sync_endpoint' => env('SUBGUARD_LICENSE_REVOCATION_SYNC_ENDPOINT', ''),
             'sync_token' => env('SUBGUARD_LICENSE_REVOCATION_SYNC_TOKEN', ''),
             'sync_timeout_seconds' => (int) env('SUBGUARD_LICENSE_REVOCATION_SYNC_TIMEOUT_SECONDS', 10),

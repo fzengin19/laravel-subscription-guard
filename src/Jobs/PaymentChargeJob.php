@@ -116,7 +116,7 @@ final class PaymentChargeJob implements ShouldQueue
                     $subscription->setAttribute('status', SubscriptionStatus::PastDue->value);
 
                     if ($subscription->getAttribute('grace_ends_at') === null) {
-                        $subscription->setAttribute('grace_ends_at', now()->addDays(7));
+                        $subscription->setAttribute('grace_ends_at', now()->addDays((int) config('subscription-guard.billing.grace_period_days', 7)));
                     }
 
                     $subscription->save();

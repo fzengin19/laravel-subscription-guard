@@ -13,6 +13,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Data\DiscountResult;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Exceptions\SubGuardException;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\PaymentCompleted;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\PaymentFailed;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\SubscriptionCancelled;
@@ -52,6 +53,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
             'status' => SubscriptionStatus::Pending->value,
             'billing_period' => (string) $plan->getAttribute('billing_period'),
             'billing_interval' => (int) $plan->getAttribute('billing_interval'),
+            'billing_anchor_day' => (int) now()->day,
             'amount' => (float) $plan->getAttribute('price'),
             'currency' => (string) $plan->getAttribute('currency'),
             'next_billing_date' => now(),
@@ -189,7 +191,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
             ->whereIn('status', ['failed', 'retrying'])
             ->whereNotNull('next_retry_at')
             ->where('next_retry_at', '<=', $formattedDate)
-            ->where('retry_count', '<', 3)
+            ->where('retry_count', '<', (int) config('subscription-guard.billing.max_dunning_retries', 3))
             ->get();
 
         foreach ($transactions as $transaction) {
@@ -275,15 +277,14 @@ final class SubscriptionService implements SubscriptionServiceInterface
         }
 
         $eventType = strtolower((string) ($result->eventType ?? ''));
-        $currentStatus = (string) $subscription->getAttribute('status');
-
-        if ($currentStatus === SubscriptionStatus::Cancelled->value
-            && in_array($eventType, ['subscription.created', 'subscription.order.success'], true)) {
-            return;
-        }
 
         if ($eventType === 'subscription.created') {
-            $subscription->setAttribute('status', SubscriptionStatus::Active->value);
+            try {
+                $subscription->transitionTo(SubscriptionStatus::Active);
+            } catch (SubGuardException) {
+                return;
+            }
+
             $subscription->save();
 
             Event::dispatch(new SubscriptionCreated($provider, $result->subscriptionId, $subscription->getKey()));
@@ -296,7 +297,12 @@ final class SubscriptionService implements SubscriptionServiceInterface
         }
 
         if (in_array($eventType, ['subscription.canceled', 'subscription.cancelled'], true)) {
-            $subscription->setAttribute('status', SubscriptionStatus::Cancelled->value);
+            try {
+                $subscription->transitionTo(SubscriptionStatus::Cancelled);
+            } catch (SubGuardException) {
+                return;
+            }
+
             $subscription->setAttribute('cancelled_at', now());
             $subscription->save();
 
@@ -329,7 +335,17 @@ final class SubscriptionService implements SubscriptionServiceInterface
 
         if ($result->status !== null && $result->status !== '') {
             $normalizedStatus = SubscriptionStatus::normalize($result->status);
-            $subscription->setAttribute('status', $normalizedStatus instanceof SubscriptionStatus ? $normalizedStatus->value : $result->status);
+
+            if ($normalizedStatus instanceof SubscriptionStatus) {
+                try {
+                    $subscription->transitionTo($normalizedStatus);
+                } catch (SubGuardException) {
+                    return;
+                }
+            } else {
+                $subscription->setAttribute('status', $result->status);
+            }
+
             $subscription->save();
         }
     }
@@ -369,7 +385,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 'currency' => (string) $subscription->getAttribute('currency'),
                 'processed_at' => now(),
                 'retry_count' => $result->success ? 0 : 1,
-                'next_retry_at' => $result->success ? null : now()->addDays(2),
+                'next_retry_at' => $result->success ? null : now()->addDays((int) config('subscription-guard.billing.dunning_retry_interval_days', 2)),
                 'last_retry_at' => $result->success ? null : now(),
                 'provider_response' => $result->providerResponse,
             ]
@@ -387,11 +403,13 @@ final class SubscriptionService implements SubscriptionServiceInterface
             $subscription->setAttribute('status', SubscriptionStatus::Active->value);
             $subscription->setAttribute('grace_ends_at', null);
             $nextBillingDate = $subscription->getAttribute('next_billing_date');
+            $anchorDay = $subscription->getAttribute('billing_anchor_day');
+            $anchor = is_numeric($anchorDay) ? (int) $anchorDay : null;
 
             if ($nextBillingDate instanceof Carbon) {
-                $subscription->setAttribute('next_billing_date', $nextBillingDate->copy()->addMonth());
+                $subscription->setAttribute('next_billing_date', $this->advanceBillingDate($nextBillingDate, $anchor));
             } else {
-                $subscription->setAttribute('next_billing_date', now()->addMonth());
+                $subscription->setAttribute('next_billing_date', $this->advanceBillingDate(now(), $anchor));
             }
 
             $subscription->save();
@@ -419,7 +437,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $subscription->setAttribute('status', SubscriptionStatus::PastDue->value);
 
         if ($subscription->getAttribute('grace_ends_at') === null) {
-            $subscription->setAttribute('grace_ends_at', now()->addDays(7));
+            $subscription->setAttribute('grace_ends_at', now()->addDays((int) config('subscription-guard.billing.grace_period_days', 7)));
         }
 
         $subscription->save();
@@ -519,7 +537,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 'currency' => (string) $subscription->getAttribute('currency'),
                 'processed_at' => now(),
                 'retry_count' => $success ? 0 : 1,
-                'next_retry_at' => $success ? null : now()->addDays(2),
+                'next_retry_at' => $success ? null : now()->addDays((int) config('subscription-guard.billing.dunning_retry_interval_days', 2)),
                 'last_retry_at' => $success ? null : now(),
                 'provider_response' => $result->metadata,
             ]
@@ -547,11 +565,13 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 );
             } else {
                 $nextBillingDate = $subscription->getAttribute('next_billing_date');
+                $anchorDay = $subscription->getAttribute('billing_anchor_day');
+                $anchor = is_numeric($anchorDay) ? (int) $anchorDay : null;
 
                 if ($nextBillingDate instanceof Carbon) {
-                    $subscription->setAttribute('next_billing_date', $nextBillingDate->copy()->addMonth());
+                    $subscription->setAttribute('next_billing_date', $this->advanceBillingDate($nextBillingDate, $anchor));
                 } else {
-                    $subscription->setAttribute('next_billing_date', now()->addMonth());
+                    $subscription->setAttribute('next_billing_date', $this->advanceBillingDate(now(), $anchor));
                 }
             }
 
@@ -574,7 +594,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $subscription->setAttribute('status', SubscriptionStatus::PastDue->value);
 
         if ($subscription->getAttribute('grace_ends_at') === null) {
-            $subscription->setAttribute('grace_ends_at', now()->addDays(7));
+            $subscription->setAttribute('grace_ends_at', now()->addDays((int) config('subscription-guard.billing.grace_period_days', 7)));
         }
 
         $subscription->save();
@@ -595,5 +615,18 @@ final class SubscriptionService implements SubscriptionServiceInterface
     private function billingTimezone(): string
     {
         return (string) config('subscription-guard.billing.timezone', 'Europe/Istanbul');
+    }
+
+    private function advanceBillingDate(Carbon $currentDate, ?int $anchorDay = null): Carbon
+    {
+        if ($anchorDay === null || $anchorDay < 1 || $anchorDay > 31) {
+            $anchorDay = $currentDate->day;
+        }
+
+        $next = $currentDate->copy()->addMonthNoOverflow();
+        $maxDay = $next->daysInMonth;
+        $next->day = min($anchorDay, $maxDay);
+
+        return $next;
     }
 }
