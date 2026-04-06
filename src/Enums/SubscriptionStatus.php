@@ -31,4 +31,29 @@ enum SubscriptionStatus: string
             default => null,
         };
     }
+
+    /**
+     * @return array<self>
+     */
+    public function allowedTransitions(): array
+    {
+        return match ($this) {
+            self::Pending => [self::Active, self::Failed, self::Cancelled],
+            self::Active => [self::Cancelled, self::Paused, self::PastDue, self::Suspended],
+            self::PastDue => [self::Active, self::Suspended, self::Cancelled],
+            self::Paused => [self::Active, self::Cancelled],
+            self::Suspended => [self::Active, self::Cancelled],
+            self::Cancelled => [],
+            self::Failed => [self::Active, self::Cancelled],
+        };
+    }
+
+    public function canTransitionTo(self $target): bool
+    {
+        if ($this === $target) {
+            return true;
+        }
+
+        return in_array($target, $this->allowedTransitions(), true);
+    }
 }

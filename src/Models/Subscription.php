@@ -9,6 +9,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Exceptions\SubGuardException;
 
 class Subscription extends Model
 {
@@ -82,5 +84,30 @@ class Subscription extends Model
     public function scheduledChange(): BelongsTo
     {
         return $this->belongsTo(ScheduledPlanChange::class, 'scheduled_change_id');
+    }
+
+    public function transitionTo(SubscriptionStatus $newStatus): void
+    {
+        $currentStatusValue = (string) $this->getAttribute('status');
+        $currentStatus = SubscriptionStatus::normalize($currentStatusValue);
+
+        if (! $currentStatus instanceof SubscriptionStatus) {
+            $this->setAttribute('status', $newStatus->value);
+
+            return;
+        }
+
+        if (! $currentStatus->canTransitionTo($newStatus)) {
+            throw new SubGuardException(
+                sprintf(
+                    'Invalid subscription state transition: %s → %s (subscription #%s)',
+                    $currentStatus->value,
+                    $newStatus->value,
+                    (string) $this->getKey()
+                )
+            );
+        }
+
+        $this->setAttribute('status', $newStatus->value);
     }
 }
