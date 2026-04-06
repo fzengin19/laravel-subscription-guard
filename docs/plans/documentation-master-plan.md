@@ -208,6 +208,9 @@ Expected outputs:
 
 ### Phase 2: System Model and Core Reference
 
+**Detailed Plan**: `phase-2-documentation-system-model-and-core-reference/plan.md`
+**Status**: Planning
+
 Purpose:
 
 - explain how billing, licensing, providers, models, events, and jobs fit together.
@@ -217,6 +220,7 @@ Expected outputs:
 - `docs/ARCHITECTURE.md`,
 - `docs/DOMAIN-BILLING.md`,
 - `docs/DOMAIN-LICENSING.md`,
+- `docs/DOMAIN-PROVIDERS.md`,
 - `docs/DATA-MODEL.md`,
 - `docs/EVENTS-AND-JOBS.md`.
 
@@ -344,4 +348,4 @@ Those belong in dedicated documentation phase plan files.
 
 ## Next Step
 
-Write the dedicated phase plan for **Phase 2: System Model and Core Reference** and use the Phase 1 entry layer as the navigation base for deeper public reference docs.
+Execute **Phase 2: System Model and Core Reference** from `phase-2-documentation-system-model-and-core-reference/plan.md` and build the public architecture/domain reference layer on top of the Phase 1 entry docs.
