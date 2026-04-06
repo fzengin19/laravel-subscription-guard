@@ -146,6 +146,18 @@ final class DiscountService
             ];
         }
 
+        $discountCurrency = strtoupper(trim((string) $discount->getAttribute('currency')));
+        $subscriptionCurrency = strtoupper(trim((string) $subscription->getAttribute('currency')));
+
+        if ($discountCurrency !== '' && $subscriptionCurrency !== '' && $discountCurrency !== $subscriptionCurrency) {
+            return [
+                'amount' => round($baseAmount, 2),
+                'discount_amount' => 0.0,
+                'coupon_id' => null,
+                'discount_id' => null,
+            ];
+        }
+
         $relatedCoupon = $discount->coupon;
 
         $discountAmount = $this->computeDiscountAmount(
