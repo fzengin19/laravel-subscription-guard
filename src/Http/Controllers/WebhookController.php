@@ -4,9 +4,11 @@ declare(strict_types=1);
 
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Http\Controllers;
 
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use SubscriptionGuard\LaravelSubscriptionGuard\Http\Concerns\ResolvesWebhookEventId;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\FinalizeWebhookEventJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
@@ -30,13 +32,30 @@ final class WebhookController
         }
 
         $payload = $request->all();
+
+        if ($payload === []) {
+            return response()->json(['error' => 'Empty payload'], 400);
+        }
+
         $eventType = $this->resolveEventType($payload);
         $eventId = $this->resolveEventId($provider, $payload, $eventType, $request->getContent());
 
-        $lock = cache()->lock('subguard:webhook-intake:'.$provider.':'.$eventId, 10);
+        if ($eventType === 'unknown') {
+            Log::channel(
+                (string) config('subscription-guard.logging.webhooks_channel', 'subguard_webhooks')
+            )->warning('Webhook received with unknown event type', [
+                'provider' => $provider,
+                'event_id' => $eventId,
+                'payload_keys' => array_keys($payload),
+            ]);
+        }
+
+        $lockTtl = (int) config('subscription-guard.locks.webhook_lock_ttl', 10);
+        $blockTimeout = (int) config('subscription-guard.locks.webhook_block_timeout', 5);
+        $lock = cache()->lock('subguard:webhook-intake:'.$provider.':'.$eventId, $lockTtl);
 
         try {
-            $result = $lock->block(5, function () use ($provider, $eventId, $eventType, $request, $payload): array {
+            $result = $lock->block($blockTimeout, function () use ($provider, $eventId, $eventType, $request, $payload): array {
                 return DB::transaction(function () use ($provider, $eventId, $eventType, $request, $payload): array {
                     $existingCall = WebhookCall::query()
                         ->where('provider', $provider)
@@ -84,6 +103,18 @@ final class WebhookController
                     ];
                 });
             });
+        } catch (LockTimeoutException) {
+            Log::channel(
+                (string) config('subscription-guard.logging.webhooks_channel', 'subguard_webhooks')
+            )->warning('Webhook lock timeout', [
+                'provider' => $provider,
+                'event_id' => $eventId,
+            ]);
+
+            return response()->json([
+                'status' => 'retry',
+                'message' => 'Server busy, please retry',
+            ], 503);
         } finally {
             $lock->release();
         }
@@ -93,8 +124,13 @@ final class WebhookController
                 ->onQueue($this->paymentManager->queueName('webhooks_queue', 'subguard-webhooks'));
         }
 
-        if ($provider === 'paytr') {
-            return response('OK', 200)->header('Content-Type', 'text/plain');
+        $providerConfig = config("subscription-guard.providers.drivers.{$provider}", []);
+        $responseFormat = (string) (is_array($providerConfig) ? ($providerConfig['webhook_response_format'] ?? 'json') : 'json');
+
+        if ($responseFormat === 'text') {
+            $body = (string) (is_array($providerConfig) ? ($providerConfig['webhook_response_body'] ?? 'OK') : 'OK');
+
+            return response($body, 200)->header('Content-Type', 'text/plain');
         }
 
         return response()->json([
