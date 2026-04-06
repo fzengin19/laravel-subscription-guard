@@ -27,6 +27,13 @@ final class LicenseValidationController
             ], 422);
         }
 
+        if (strlen($licenseKey) > 2048) {
+            return response()->json([
+                'valid' => false,
+                'reason' => 'License key exceeds maximum length.',
+            ], 422);
+        }
+
         $result = $this->licenseManager->validate($licenseKey);
 
         if (! $result->valid) {

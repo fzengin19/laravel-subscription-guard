@@ -17,6 +17,7 @@ class Plan extends Model
             'features' => 'array',
             'limits' => 'array',
             'is_active' => 'bool',
+            'price' => 'float',
         ];
     }
 

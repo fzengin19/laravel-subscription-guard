@@ -14,7 +14,7 @@ return [
                 'base_url' => env('IYZICO_BASE_URL', 'https://sandbox-api.iyzipay.com'),
                 'callback_url' => env('IYZICO_CALLBACK_URL'),
                 'signature_header' => 'x-iyz-signature-v3',
-                'mock' => env('IYZICO_MOCK', true),
+                'mock' => env('IYZICO_MOCK', false),
             ],
             'paytr' => [
                 'class' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider::class,
@@ -24,7 +24,7 @@ return [
                 'merchant_key' => env('PAYTR_MERCHANT_KEY'),
                 'merchant_salt' => env('PAYTR_MERCHANT_SALT'),
                 'callback_url' => env('PAYTR_CALLBACK_URL'),
-                'mock' => env('PAYTR_MOCK', true),
+                'mock' => env('PAYTR_MOCK', false),
                 'webhook_response_format' => 'text',
                 'webhook_response_body' => 'OK',
             ],
@@ -34,7 +34,12 @@ return [
     'webhooks' => [
         'auto_register_routes' => true,
         'prefix' => env('SUBGUARD_WEBHOOK_PREFIX', 'subguard/webhooks'),
-        'middleware' => ['api'],
+        'middleware' => ['api', 'throttle:webhook-intake'],
+        'rate_limit' => [
+            'key' => 'webhook-intake',
+            'max_attempts' => 120,
+            'decay_minutes' => 1,
+        ],
     ],
 
     'queue' => [

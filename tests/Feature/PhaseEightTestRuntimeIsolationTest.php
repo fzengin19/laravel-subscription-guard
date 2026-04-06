@@ -27,7 +27,6 @@ it('pins deterministic suite discovery and runtime defaults in phpunit xml', fun
         'DB_CONNECTION' => 'testing',
         'DB_DATABASE' => ':memory:',
         'TELESCOPE_ENABLED' => 'false',
-        'IYZICO_MOCK' => 'true',
     ]);
 
     expect(file_get_contents(phaseEightRepoRoot().'/.gitignore') ?: '')->not->toContain("\ntestbench.yaml");

@@ -16,6 +16,8 @@ class Discount extends Model
     {
         return [
             'metadata' => 'array',
+            'value' => 'float',
+            'applied_amount' => 'float',
         ];
     }
 

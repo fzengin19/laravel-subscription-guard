@@ -50,7 +50,12 @@ final class MeteredBillingProcessor
                 $periodEnd = $locked->getAttribute('current_period_end') ?? $processDate;
 
                 if (! $periodStart instanceof Carbon) {
-                    $periodStart = $processDate->copy()->startOfMonth();
+                    $billingPeriod = (string) $locked->getAttribute('billing_period');
+                    $periodStart = match ($billingPeriod) {
+                        'week', 'weekly' => $processDate->copy()->startOfWeek(),
+                        'year', 'yearly', 'annual' => $processDate->copy()->startOfYear(),
+                        default => $processDate->copy()->startOfMonth(),
+                    };
                 }
 
                 if (! $periodEnd instanceof Carbon) {

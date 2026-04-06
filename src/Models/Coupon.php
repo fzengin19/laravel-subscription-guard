@@ -18,6 +18,9 @@ class Coupon extends Model
             'expires_at' => 'datetime',
             'is_active' => 'bool',
             'metadata' => 'array',
+            'value' => 'float',
+            'min_purchase_amount' => 'float',
+            'max_discount_amount' => 'float',
         ];
     }
 

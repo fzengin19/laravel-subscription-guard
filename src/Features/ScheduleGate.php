@@ -54,14 +54,22 @@ final class ScheduleGate
             $until = $value['until'] ?? null;
 
             if (is_string($until) && $until !== '') {
-                return Carbon::parse($until);
+                try {
+                    return Carbon::parse($until);
+                } catch (\Throwable) {
+                    return null;
+                }
             }
 
             return null;
         }
 
         if (is_string($value) && $value !== '') {
-            return Carbon::parse($value);
+            try {
+                return Carbon::parse($value);
+            } catch (\Throwable) {
+                return null;
+            }
         }
 
         return null;

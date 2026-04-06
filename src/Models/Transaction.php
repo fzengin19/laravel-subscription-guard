@@ -6,6 +6,7 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
@@ -106,12 +107,24 @@ class Transaction extends Model
             'refunded_at' => 'datetime',
             'next_retry_at' => 'datetime',
             'last_retry_at' => 'datetime',
+            'amount' => 'float',
+            'tax_amount' => 'float',
+            'tax_rate' => 'float',
+            'discount_amount' => 'float',
+            'refunded_amount' => 'float',
+            'fee' => 'float',
+            'exchange_rate' => 'float',
         ];
     }
 
     public function subscription(): BelongsTo
     {
         return $this->belongsTo(Subscription::class);
+    }
+
+    public function invoice(): HasOne
+    {
+        return $this->hasOne(Invoice::class);
     }
 
     public function license(): BelongsTo

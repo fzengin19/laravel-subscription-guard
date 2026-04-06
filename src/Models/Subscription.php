@@ -48,6 +48,9 @@ class Subscription extends Model
             'resumes_at' => 'datetime',
             'cancels_at' => 'datetime',
             'cancelled_at' => 'datetime',
+            'amount' => 'float',
+            'tax_amount' => 'float',
+            'tax_rate' => 'float',
         ];
     }
 
