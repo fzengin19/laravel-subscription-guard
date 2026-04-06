@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Billing\Invoices;
 
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Invoice;
@@ -33,7 +34,8 @@ final class InvoicePdfRenderer
                 $pdfFacade::html($html)->disk('local')->save($relativePath);
 
                 return $relativePath;
-            } catch (Throwable) {
+            } catch (Throwable $e) {
+                Log::warning('PDF generation failed for invoice '.$invoiceNumber.': '.$e->getMessage());
             }
         }
 
