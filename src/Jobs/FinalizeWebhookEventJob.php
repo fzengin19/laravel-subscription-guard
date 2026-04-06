@@ -66,7 +66,7 @@ final class FinalizeWebhookEventJob implements ShouldQueue
                 try {
                     $providerAdapter = $paymentManager->provider($provider);
                 } catch (ProviderException) {
-                    $webhookCall->markProcessed('Provider adapter not configured; webhook accepted as no-op.');
+                    $webhookCall->markFailed('Provider adapter not configured.');
 
                     return;
                 }
