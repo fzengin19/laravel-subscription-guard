@@ -34,7 +34,7 @@ final class WebhookController
         $payload = $request->all();
 
         if ($payload === []) {
-            return response()->json(['error' => 'Empty payload'], 400);
+            return response()->json(['status' => 'rejected', 'reason' => 'Empty payload.'], 400);
         }
 
         $eventType = $this->resolveEventType($payload);
