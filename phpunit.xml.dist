@@ -43,7 +43,6 @@
         <server name="IYZICO_SECRET_KEY" value=""/>
         <server name="IYZICO_BASE_URL" value="https://sandbox-api.iyzipay.com"/>
         <server name="IYZICO_CALLBACK_URL" value="http://localhost:8000/subguard/webhooks/iyzico/checkout/callback"/>
-        <server name="IYZICO_MOCK" value="true"/>
         <server name="MAIL_MAILER" value="array"/>
         <server name="QUEUE_CONNECTION" value="sync"/>
         <server name="SESSION_DRIVER" value="array"/>
