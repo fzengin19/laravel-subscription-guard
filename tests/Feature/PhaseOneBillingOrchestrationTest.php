@@ -129,8 +129,9 @@ it('dispatches dunning retry jobs for due failed transactions', function (): voi
 
     $processed = app(SubscriptionServiceInterface::class)->processDunning($date);
 
-    expect($processed)->toBe(1);
-    Bus::assertDispatched(ProcessDunningRetryJob::class, 1);
+    // Both transactions are dispatched: retry_count=1 for retry, retry_count=3 for exhaustion handling
+    expect($processed)->toBe(2);
+    Bus::assertDispatched(ProcessDunningRetryJob::class, 2);
     Bus::assertDispatched(ProcessDunningRetryJob::class, function (ProcessDunningRetryJob $job) use ($transaction): bool {
         return (string) $job->transactionId === (string) $transaction->getKey();
     });

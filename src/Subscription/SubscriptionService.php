@@ -187,11 +187,16 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $count = 0;
         $formattedDate = Carbon::instance($date)->setTimezone($this->billingTimezone());
 
+        $maxRetries = (int) config('subscription-guard.billing.max_dunning_retries', 3);
+
         $transactions = Transaction::query()
             ->whereIn('status', ['failed', 'retrying'])
-            ->whereNotNull('next_retry_at')
-            ->where('next_retry_at', '<=', $formattedDate)
-            ->where('retry_count', '<', (int) config('subscription-guard.billing.max_dunning_retries', 3))
+            ->where(function ($query) use ($formattedDate, $maxRetries) {
+                $query->where(function ($q) use ($formattedDate) {
+                    $q->whereNotNull('next_retry_at')
+                        ->where('next_retry_at', '<=', $formattedDate);
+                })->orWhere('retry_count', '>=', $maxRetries);
+            })
             ->get();
 
         foreach ($transactions as $transaction) {

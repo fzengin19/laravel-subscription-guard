@@ -765,6 +765,7 @@ it('skips transactions that have reached max retries during dunning', function (
 
     $processed = app(SubscriptionServiceInterface::class)->processDunning($date);
 
-    expect($processed)->toBe(0);
-    Bus::assertNotDispatched(ProcessDunningRetryJob::class);
+    // Exhausted transactions are now dispatched so the job can run the suspension pipeline
+    expect($processed)->toBe(1);
+    Bus::assertDispatched(ProcessDunningRetryJob::class);
 });
