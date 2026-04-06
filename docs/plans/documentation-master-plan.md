@@ -192,7 +192,7 @@ Expected outputs:
 ### Phase 1: Entry Path and First Success
 
 **Detailed Plan**: `phase-1-documentation-entry-path-and-first-success/plan.md`
-**Status**: Planning
+**Status**: Completed (2026-04-06)
 
 Purpose:
 
@@ -344,4 +344,4 @@ Those belong in dedicated documentation phase plan files.
 
 ## Next Step
 
-Write the dedicated phase plan for **Phase 1: Entry Path and First Success** and begin the public-doc rewrite from the package front door.
+Write the dedicated phase plan for **Phase 2: System Model and Core Reference** and use the Phase 1 entry layer as the navigation base for deeper public reference docs.
