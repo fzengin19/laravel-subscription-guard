@@ -227,7 +227,7 @@ Expected outputs:
 ### Phase 3: Provider and Integration Surface
 
 **Detailed Plan**: `phase-3-documentation-provider-and-integration-surface/plan.md`
-**Status**: Planning
+**Status**: Completed (2026-04-07)
 
 Purpose:
 
@@ -351,4 +351,4 @@ Those belong in dedicated documentation phase plan files.
 
 ## Next Step
 
-Execute the detailed phase plan for **Phase 3: Provider and Integration Surface** and expand the public docs from system-model references into provider-specific and inbound-integration reference docs.
+Write the dedicated phase plan for **Phase 4: Billing and Licensing Operational Flows** and expand the public docs from provider and integration reference into business-flow and operational workflow docs.

@@ -57,7 +57,7 @@ That mutation boundary belongs to `SubscriptionService` and background jobs.
 
 - `manages_own_billing = false`
 - Package orchestrates recurring charge and dunning behavior.
-- Signature header defaults to `x-paytr-signature`.
+- Webhook validation uses merchant key and merchant salt hashing rules, with payload `hash` support.
 - Webhook normalization maps provider payloads into package billing events and retryable outcomes.
 
 ## Webhook Simulation
@@ -86,6 +86,11 @@ Use the deeper references by question:
 - [Domain Billing](DOMAIN-BILLING.md)
 - [Architecture](ARCHITECTURE.md)
 - [API](API.md)
+- [Webhooks](WEBHOOKS.md)
+- [Callbacks](CALLBACKS.md)
+- [iyzico Provider](providers/IYZICO.md)
+- [PayTR Provider](providers/PAYTR.md)
+- [Custom Provider](providers/CUSTOM-PROVIDER.md)
 
 ## Installment Strategy Warning
 

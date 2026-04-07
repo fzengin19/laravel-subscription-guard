@@ -32,7 +32,7 @@ High-impact notes:
   - PayTR: package-managed recurring behavior
 - `mock` must be treated carefully. It is useful for controlled local or test flows, but it is not a substitute for real provider validation.
 
-See [Providers](PROVIDERS.md) for the overview and [Domain Providers](DOMAIN-PROVIDERS.md) for the canonical provider model.
+See [Providers](PROVIDERS.md) for the overview, [Domain Providers](DOMAIN-PROVIDERS.md) for the canonical provider model, [providers/IYZICO](providers/IYZICO.md) for iyzico specifics, and [providers/PAYTR](providers/PAYTR.md) for PayTR specifics.
 
 ## Webhooks
 
@@ -50,7 +50,7 @@ High-impact notes:
 - `middleware` should stay compatible with your API stack and rate-limiting policy.
 - `rate_limit.*` affects webhook intake protection and burst handling.
 
-Current route shapes are summarized in [API](API.md). The request-to-job flow is described in [Events And Jobs](EVENTS-AND-JOBS.md).
+Current route shapes are summarized in [API](API.md). Transport behavior is described in [Webhooks](WEBHOOKS.md) and [Callbacks](CALLBACKS.md). The request-to-job flow is described in [Events And Jobs](EVENTS-AND-JOBS.md).
 
 ## Queue
 
@@ -187,4 +187,8 @@ Continue with:
 - [Domain Licensing](DOMAIN-LICENSING.md)
 - [Events And Jobs](EVENTS-AND-JOBS.md)
 - [Providers](PROVIDERS.md)
+- [Webhooks](WEBHOOKS.md)
+- [Callbacks](CALLBACKS.md)
+- [providers/IYZICO](providers/IYZICO.md)
+- [providers/PAYTR](providers/PAYTR.md)
 - [Licensing](LICENSING.md)

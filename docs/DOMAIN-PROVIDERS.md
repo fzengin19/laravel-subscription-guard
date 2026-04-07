@@ -180,7 +180,10 @@ For provider-related public docs, use:
 
 - [Providers Overview](PROVIDERS.md)
 - [API](API.md)
+- [Webhooks](WEBHOOKS.md)
+- [Callbacks](CALLBACKS.md)
 - [Architecture](ARCHITECTURE.md)
 - [Domain Billing](DOMAIN-BILLING.md)
-
-Provider-specific deep reference docs under `docs/providers/` belong to the next documentation phase.
+- [iyzico Provider](providers/IYZICO.md)
+- [PayTR Provider](providers/PAYTR.md)
+- [Custom Provider](providers/CUSTOM-PROVIDER.md)
