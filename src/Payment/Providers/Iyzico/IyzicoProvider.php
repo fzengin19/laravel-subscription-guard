@@ -31,10 +31,12 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Data\SubscriptionResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Exceptions\UnsupportedProviderOperationException;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Concerns\SanitizesProviderData;
 use Throwable;
 
 final class IyzicoProvider implements PaymentProviderInterface
 {
+    use SanitizesProviderData;
     public function __construct(
         private readonly IyzicoRequestBuilder $requestBuilder,
         private readonly IyzicoCardManager $cardManager,
@@ -68,7 +70,7 @@ final class IyzicoProvider implements PaymentProviderInterface
             try {
                 return $this->livePay($amount, $details, $mode);
             } catch (Throwable $exception) {
-                return new PaymentResponse(false, null, null, null, null, $details, 'Iyzico live payment failed: '.$exception->getMessage());
+                return new PaymentResponse(false, null, null, null, null, $this->sanitizeProviderResponse($details), 'Iyzico live payment failed: '.$this->sanitizeExceptionMessage($exception->getMessage()));
             }
         }
 
@@ -159,7 +161,7 @@ final class IyzicoProvider implements PaymentProviderInterface
 
                 return new RefundResponse(true, $refundId, $payload);
             } catch (Throwable $exception) {
-                return new RefundResponse(false, null, ['transaction_id' => $transactionId], 'Iyzico live refund failed: '.$exception->getMessage());
+                return new RefundResponse(false, null, ['transaction_id' => $transactionId], 'Iyzico live refund failed: '.$this->sanitizeExceptionMessage($exception->getMessage()));
             }
         }
 
@@ -232,7 +234,7 @@ final class IyzicoProvider implements PaymentProviderInterface
 
                 return new SubscriptionResponse(true, $subscriptionId, $status !== '' ? strtolower($status) : SubscriptionStatus::Active->value, $payload);
             } catch (Throwable $exception) {
-                return new SubscriptionResponse(false, null, null, ['plan' => $plan, 'details' => $details], 'Iyzico live subscription create failed: '.$exception->getMessage());
+                return new SubscriptionResponse(false, null, null, $this->sanitizeProviderResponse(['plan' => $plan, 'details' => $details]), 'Iyzico live subscription create failed: '.$this->sanitizeExceptionMessage($exception->getMessage()));
             }
         }
 
@@ -310,7 +312,7 @@ final class IyzicoProvider implements PaymentProviderInterface
 
                 return new SubscriptionResponse(true, $subscriptionId, $status !== '' ? strtolower($status) : SubscriptionStatus::Active->value, $payload);
             } catch (Throwable $exception) {
-                return new SubscriptionResponse(false, null, null, ['mode' => $mode], 'Iyzico live subscription upgrade failed: '.$exception->getMessage());
+                return new SubscriptionResponse(false, null, null, ['mode' => $mode], 'Iyzico live subscription upgrade failed: '.$this->sanitizeExceptionMessage($exception->getMessage()));
             }
         }
 

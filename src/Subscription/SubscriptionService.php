@@ -680,7 +680,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
         return (string) config('subscription-guard.billing.timezone', 'Europe/Istanbul');
     }
 
-    private function advanceBillingDate(Carbon $currentDate, ?int $anchorDay = null, string $billingPeriod = 'month', int $billingInterval = 1): Carbon
+    public function advanceBillingDate(Carbon $currentDate, ?int $anchorDay = null, string $billingPeriod = 'month', int $billingInterval = 1): Carbon
     {
         $interval = max(1, $billingInterval);
         $next = $currentDate->copy();

@@ -185,10 +185,6 @@ class PaytrProvider implements PaymentProviderInterface
         $providedSignature = trim($signature);
 
         if ($providedSignature === '') {
-            $providedSignature = trim((string) ($payload['hash'] ?? ''));
-        }
-
-        if ($providedSignature === '') {
             return false;
         }
 

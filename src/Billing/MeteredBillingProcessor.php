@@ -89,11 +89,6 @@ final class MeteredBillingProcessor
                 $idempotencyKey = sprintf('subguard:metered:%d:%s', (int) $locked->getKey(), $periodToken);
 
                 $provider = (string) $locked->getAttribute('provider');
-                $transaction = Transaction::unguarded(static fn (): Transaction => Transaction::query()->firstOrNew(['idempotency_key' => $idempotencyKey]));
-
-                if ((string) $transaction->getAttribute('status') === 'processed') {
-                    return false;
-                }
 
                 $baseProviderResponse = [
                     'usage_total' => $totalUsage,
@@ -102,21 +97,30 @@ final class MeteredBillingProcessor
                     'period_end' => $periodEnd->toIso8601String(),
                 ];
 
-                if (! $transaction->exists) {
-                    $transaction->setAttribute('subscription_id', $locked->getKey());
-                    $transaction->setAttribute('payable_type', (string) $locked->getAttribute('subscribable_type'));
-                    $transaction->setAttribute('payable_id', (int) $locked->getAttribute('subscribable_id'));
-                    $transaction->setAttribute('license_id', (int) $licenseId);
-                    $transaction->setAttribute('provider', $provider);
-                    $transaction->setAttribute('type', 'metered_usage');
-                    $transaction->setAttribute('amount', $amount);
-                    $transaction->setAttribute('tax_amount', 0);
-                    $transaction->setAttribute('tax_rate', 0);
-                    $transaction->setAttribute('currency', (string) $locked->getAttribute('currency'));
-                    $transaction->setAttribute('metadata', [
-                        'metered' => true,
-                        'usage_total' => $totalUsage,
-                    ]);
+                $transaction = Transaction::unguarded(static fn (): Transaction => Transaction::query()->firstOrCreate(
+                    ['idempotency_key' => $idempotencyKey],
+                    [
+                        'subscription_id' => $locked->getKey(),
+                        'payable_type' => (string) $locked->getAttribute('subscribable_type'),
+                        'payable_id' => (int) $locked->getAttribute('subscribable_id'),
+                        'license_id' => (int) $licenseId,
+                        'provider' => $provider,
+                        'type' => 'metered_usage',
+                        'amount' => $amount,
+                        'tax_amount' => 0,
+                        'tax_rate' => 0,
+                        'currency' => (string) $locked->getAttribute('currency'),
+                        'metadata' => [
+                            'metered' => true,
+                            'usage_total' => $totalUsage,
+                        ],
+                        'status' => 'pending',
+                        'provider_response' => $baseProviderResponse,
+                    ]
+                ));
+
+                if ((string) $transaction->getAttribute('status') === 'processed') {
+                    return false;
                 }
 
                 $requiresProviderCharge = ! $this->paymentManager->managesOwnBilling($provider);

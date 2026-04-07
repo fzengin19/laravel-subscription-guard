@@ -21,15 +21,19 @@ final class InvoicePdfRenderer
         }
 
         $directory = 'subguard/invoices';
-        $relativePath = $directory.'/'.$invoiceNumber.'.pdf';
+        $safeFileName = preg_replace('/[^a-zA-Z0-9_\-]/', '_', $invoiceNumber) ?? $invoiceNumber;
+        $relativePath = $directory.'/'.$safeFileName.'.pdf';
 
         $pdfFacade = '\\Spatie\\LaravelPdf\\Facades\\Pdf';
 
         if (class_exists($pdfFacade)) {
             try {
-                $html = '<h1>Invoice '.$invoiceNumber.'</h1>'
+                $safeInvoiceNumber = htmlspecialchars($invoiceNumber, ENT_QUOTES | ENT_HTML5, 'UTF-8');
+                $safeCurrency = htmlspecialchars((string) $invoice->getAttribute('currency'), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+
+                $html = '<h1>Invoice '.$safeInvoiceNumber.'</h1>'
                     .'<p>Total: '.number_format((float) $invoice->getAttribute('total_amount'), 2).' '
-                    .(string) $invoice->getAttribute('currency').'</p>';
+                    .$safeCurrency.'</p>';
 
                 $pdfFacade::html($html)->disk('local')->save($relativePath);
 
