@@ -1,27 +1,47 @@
 # Providers
 
-This document describes provider responsibilities and integration rules.
+Use this document as the short provider overview.
+
+The canonical provider-domain reference now lives in [Domain Providers](DOMAIN-PROVIDERS.md).
+
+## Provider Overview
+
+The package currently supports two provider modes:
+
+- `iyzico`
+- `paytr`
+
+Both providers are resolved through `PaymentManager`, and both implement `PaymentProviderInterface`.
+
+The important difference is who owns recurring billing execution.
+
+| Provider | `manages_own_billing` | Practical Meaning |
+|---|---|---|
+| `iyzico` | `true` | Provider-managed recurring billing; local state is updated from provider results |
+| `paytr` | `false` | Package-managed recurring billing; the package runs renewal and retry orchestration |
 
 ## Architecture Boundary
 
-Provider adapter classes must:
+Provider adapter classes are expected to:
 
 - call provider APIs
 - validate signatures
-- normalize payloads into DTOs
+- normalize webhook or callback payloads
+- return package DTOs and provider-response metadata
 
-Provider adapter classes must not:
+Provider adapter classes are not expected to:
 
-- mutate package domain models directly
-- dispatch domain events directly
+- mutate subscriptions, transactions, or licenses directly
+- replace package billing orchestration
 
-Domain mutation and event orchestration belongs to `SubscriptionService` and jobs.
+That mutation boundary belongs to `SubscriptionService` and background jobs.
 
 ## iyzico
 
 - `manages_own_billing = true`
 - Supports provider-managed subscription lifecycle mapping through webhook callbacks.
 - Signature header defaults to `x-iyz-signature-v3`.
+- Exposes remote subscription and plan-sync surfaces that do not exist in the PayTR adapter.
 
 ### iyzico Live Sandbox Notes
 
@@ -38,6 +58,7 @@ Domain mutation and event orchestration belongs to `SubscriptionService` and job
 - `manages_own_billing = false`
 - Package orchestrates recurring charge and dunning behavior.
 - Signature header defaults to `x-paytr-signature`.
+- Webhook normalization maps provider payloads into package billing events and retryable outcomes.
 
 ## Webhook Simulation
 
@@ -48,12 +69,23 @@ php artisan subguard:simulate-webhook paytr payment.success
 php artisan subguard:simulate-webhook iyzico payment.success
 ```
 
+See [API](API.md) for the route summary and [Events And Jobs](EVENTS-AND-JOBS.md) for the intake-to-finalization flow.
+
 Useful options:
 
 ```bash
 php artisan subguard:simulate-webhook paytr payment.success --event-id=evt_001 --amount=99.90
 php artisan subguard:simulate-webhook iyzico payment.failed --event-id=evt_002 --transaction-id=txn_123
 ```
+
+## Where To Go Next
+
+Use the deeper references by question:
+
+- [Domain Providers](DOMAIN-PROVIDERS.md)
+- [Domain Billing](DOMAIN-BILLING.md)
+- [Architecture](ARCHITECTURE.md)
+- [API](API.md)
 
 ## Installment Strategy Warning
 

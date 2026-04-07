@@ -209,7 +209,7 @@ Expected outputs:
 ### Phase 2: System Model and Core Reference
 
 **Detailed Plan**: `phase-2-documentation-system-model-and-core-reference/plan.md`
-**Status**: Planning
+**Status**: Completed (2026-04-06)
 
 Purpose:
 
@@ -348,4 +348,4 @@ Those belong in dedicated documentation phase plan files.
 
 ## Next Step
 
-Execute **Phase 2: System Model and Core Reference** from `phase-2-documentation-system-model-and-core-reference/plan.md` and build the public architecture/domain reference layer on top of the Phase 1 entry docs.
+Write the dedicated phase plan for **Phase 3: Provider and Integration Surface** and expand the public docs from system-model references into provider-specific and inbound-integration reference docs.

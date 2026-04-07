@@ -32,7 +32,7 @@ High-impact notes:
   - PayTR: package-managed recurring behavior
 - `mock` must be treated carefully. It is useful for controlled local or test flows, but it is not a substitute for real provider validation.
 
-See [Providers](PROVIDERS.md) for current provider-specific notes.
+See [Providers](PROVIDERS.md) for the overview and [Domain Providers](DOMAIN-PROVIDERS.md) for the canonical provider model.
 
 ## Webhooks
 
@@ -50,7 +50,7 @@ High-impact notes:
 - `middleware` should stay compatible with your API stack and rate-limiting policy.
 - `rate_limit.*` affects webhook intake protection and burst handling.
 
-Current route shapes are summarized in [API](API.md).
+Current route shapes are summarized in [API](API.md). The request-to-job flow is described in [Events And Jobs](EVENTS-AND-JOBS.md).
 
 ## Queue
 
@@ -72,6 +72,8 @@ High-impact notes:
 - `queue.connection` controls how package jobs are executed.
 - `queue.queue` is the default billing queue.
 - `webhooks_queue` and `notifications_queue` let you isolate workloads by concern.
+
+See [Events And Jobs](EVENTS-AND-JOBS.md) for the current queue ownership model.
 
 ## Billing
 
@@ -96,7 +98,7 @@ High-impact notes:
 - `grace_period_days`, `max_dunning_retries`, and `dunning_retry_interval_days` shape overdue and retry behavior.
 - command-name values are useful when you want a central reference to the package's operational command surface.
 
-Deeper billing-flow documentation will be added in later phases. For now, see [Recipes](RECIPES.md) and [API](API.md) where relevant.
+See [Domain Billing](DOMAIN-BILLING.md) for the current billing-flow reference.
 
 ## Locks
 
@@ -115,6 +117,8 @@ High-impact notes:
 - renewal and dunning lock settings affect queue-worker concurrency safety.
 
 If you tune these values, do so with a clear understanding of your queue and cache backend behavior.
+
+The practical concurrency boundaries are described in [Events And Jobs](EVENTS-AND-JOBS.md).
 
 ## Logging
 
@@ -155,7 +159,7 @@ Operational commands related to this area include:
 - `subguard:sync-license-revocations`
 - `subguard:sync-license-heartbeats`
 
-See [Licensing](LICENSING.md) for the current public licensing overview.
+See [Licensing](LICENSING.md) for the overview and [Domain Licensing](DOMAIN-LICENSING.md) for the canonical licensing model.
 
 ## Routes
 
@@ -177,5 +181,10 @@ Continue with:
 
 - [Installation](INSTALLATION.md)
 - [Quickstart](QUICKSTART.md)
+- [Architecture](ARCHITECTURE.md)
+- [Domain Billing](DOMAIN-BILLING.md)
+- [Domain Providers](DOMAIN-PROVIDERS.md)
+- [Domain Licensing](DOMAIN-LICENSING.md)
+- [Events And Jobs](EVENTS-AND-JOBS.md)
 - [Providers](PROVIDERS.md)
 - [Licensing](LICENSING.md)
