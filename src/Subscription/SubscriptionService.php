@@ -6,6 +6,7 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Subscription;
 
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\ProviderEventDispatcherInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\SubscriptionServiceInterface;
@@ -45,24 +46,45 @@ final class SubscriptionService implements SubscriptionServiceInterface
     {
         $plan = Plan::query()->findOrFail($planId);
 
-        $subscription = Subscription::unguarded(fn (): Subscription => Subscription::query()->create([
-            'subscribable_type' => (string) config('auth.providers.users.model', 'App\\Models\\User'),
-            'subscribable_id' => $subscribableId,
-            'plan_id' => $planId,
-            'provider' => $this->paymentManager->defaultProvider(),
-            'status' => SubscriptionStatus::Pending->value,
-            'billing_period' => (string) $plan->getAttribute('billing_period'),
-            'billing_interval' => (int) $plan->getAttribute('billing_interval'),
-            'billing_anchor_day' => (int) now()->day,
-            'amount' => (float) $plan->getAttribute('price'),
-            'currency' => (string) $plan->getAttribute('currency'),
-            'next_billing_date' => now(),
-            'metadata' => [
-                'payment_method_id' => $paymentMethodId,
-            ],
-        ]));
+        return DB::transaction(function () use ($subscribableId, $planId, $paymentMethodId, $plan): array {
+            $userModelClass = (string) config('auth.providers.users.model', 'App\\Models\\User');
 
-        return $subscription->toArray();
+            $existing = Subscription::query()
+                ->where('subscribable_type', $userModelClass)
+                ->where('subscribable_id', $subscribableId)
+                ->where('plan_id', $planId)
+                ->whereIn('status', [
+                    SubscriptionStatus::Active->value,
+                    SubscriptionStatus::Pending->value,
+                    SubscriptionStatus::PastDue->value,
+                    'trialing',
+                ])
+                ->lockForUpdate()
+                ->first();
+
+            if ($existing instanceof Subscription) {
+                return $existing->toArray();
+            }
+
+            $subscription = Subscription::unguarded(fn (): Subscription => Subscription::query()->create([
+                'subscribable_type' => $userModelClass,
+                'subscribable_id' => $subscribableId,
+                'plan_id' => $planId,
+                'provider' => $this->paymentManager->defaultProvider(),
+                'status' => SubscriptionStatus::Pending->value,
+                'billing_period' => (string) $plan->getAttribute('billing_period'),
+                'billing_interval' => (int) $plan->getAttribute('billing_interval'),
+                'billing_anchor_day' => (int) now()->day,
+                'amount' => (float) $plan->getAttribute('price'),
+                'currency' => (string) $plan->getAttribute('currency'),
+                'next_billing_date' => now(),
+                'metadata' => [
+                    'payment_method_id' => $paymentMethodId,
+                ],
+            ]));
+
+            return $subscription->toArray();
+        });
     }
 
     public function cancel(int|string $subscriptionId): bool
@@ -282,15 +304,23 @@ final class SubscriptionService implements SubscriptionServiceInterface
 
         $providerEvents = $this->providerEventDispatchers->resolve($provider);
 
-        $subscription = Subscription::query()
-            ->where('provider', $provider)
-            ->where('provider_subscription_id', $result->subscriptionId)
-            ->first();
+        DB::transaction(function () use ($result, $provider, $providerEvents): void {
+            $subscription = Subscription::query()
+                ->where('provider', $provider)
+                ->where('provider_subscription_id', $result->subscriptionId)
+                ->lockForUpdate()
+                ->first();
 
-        if (! $subscription instanceof Subscription) {
-            return;
-        }
+            if (! $subscription instanceof Subscription) {
+                return;
+            }
 
+            $this->processWebhookForSubscription($result, $provider, $subscription, $providerEvents);
+        });
+    }
+
+    private function processWebhookForSubscription(WebhookResult $result, string $provider, Subscription $subscription, ProviderEventDispatcherInterface $providerEvents): void
+    {
         $eventType = strtolower((string) ($result->eventType ?? ''));
 
         if ($eventType === 'subscription.created') {
@@ -357,11 +387,9 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 } catch (SubGuardException) {
                     return;
                 }
-            } else {
-                $subscription->setAttribute('status', $result->status);
-            }
 
-            $subscription->save();
+                $subscription->save();
+            }
         }
     }
 

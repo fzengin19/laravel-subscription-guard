@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR;
 
+use Illuminate\Support\Facades\Log;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\PaymentProviderInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\RefundResponse;
@@ -166,6 +167,11 @@ class PaytrProvider implements PaymentProviderInterface
     public function validateWebhook(array $payload, string $signature): bool
     {
         if ($this->mockMode()) {
+            if (app()->environment('production')) {
+                Log::channel((string) config('subscription-guard.logging.channel', 'subguard'))
+                    ->critical('PayTR webhook signature validation bypassed: mock mode is active in production.');
+            }
+
             return true;
         }
 
