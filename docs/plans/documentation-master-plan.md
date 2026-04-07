@@ -226,6 +226,9 @@ Expected outputs:
 
 ### Phase 3: Provider and Integration Surface
 
+**Detailed Plan**: `phase-3-documentation-provider-and-integration-surface/plan.md`
+**Status**: Planning
+
 Purpose:
 
 - document provider-specific behavior and inbound integration contracts.
@@ -348,4 +351,4 @@ Those belong in dedicated documentation phase plan files.
 
 ## Next Step
 
-Write the dedicated phase plan for **Phase 3: Provider and Integration Surface** and expand the public docs from system-model references into provider-specific and inbound-integration reference docs.
+Execute the detailed phase plan for **Phase 3: Provider and Integration Surface** and expand the public docs from system-model references into provider-specific and inbound-integration reference docs.
