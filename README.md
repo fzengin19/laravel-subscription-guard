@@ -110,28 +110,59 @@ composer format -- --test
 
 ## Documentation
 
-Current public docs:
+### Getting Started
 
 - [Installation](docs/INSTALLATION.md)
 - [Quickstart](docs/QUICKSTART.md)
 - [Configuration](docs/CONFIGURATION.md)
+- [FAQ](docs/FAQ.md)
+
+### System Reference
+
 - [Architecture](docs/ARCHITECTURE.md)
 - [Domain Billing](docs/DOMAIN-BILLING.md)
-- [Domain Providers](docs/DOMAIN-PROVIDERS.md)
 - [Domain Licensing](docs/DOMAIN-LICENSING.md)
+- [Domain Providers](docs/DOMAIN-PROVIDERS.md)
 - [Data Model](docs/DATA-MODEL.md)
 - [Events And Jobs](docs/EVENTS-AND-JOBS.md)
-- [API](docs/API.md)
-- [Webhooks](docs/WEBHOOKS.md)
-- [Callbacks](docs/CALLBACKS.md)
+
+### Providers and Integration
+
 - [Providers](docs/PROVIDERS.md)
 - [iyzico Provider](docs/providers/IYZICO.md)
 - [PayTR Provider](docs/providers/PAYTR.md)
 - [Custom Provider](docs/providers/CUSTOM-PROVIDER.md)
+- [API](docs/API.md)
+- [Webhooks](docs/WEBHOOKS.md)
+- [Callbacks](docs/CALLBACKS.md)
 - [Licensing](docs/LICENSING.md)
-- [Recipes](docs/RECIPES.md)
 
-Internal planning and documentation-program docs live under `docs/plans/`.
+### Billing and Licensing Flows
+
+- [Dunning And Retries](docs/DUNNING-AND-RETRIES.md)
+- [Metered Billing](docs/METERED-BILLING.md)
+- [Seat-Based Billing](docs/SEAT-BASED-BILLING.md)
+- [Invoicing](docs/INVOICING.md)
+
+### Runtime and Operations
+
+- [Commands](docs/COMMANDS.md)
+- [Queues And Jobs](docs/QUEUES-AND-JOBS.md)
+- [Security](docs/SECURITY.md)
+- [Troubleshooting](docs/TROUBLESHOOTING.md)
+
+### Testing
+
+- [Testing](docs/TESTING.md)
+- [Live Sandbox](docs/LIVE-SANDBOX.md)
+
+### Guides and Contributor
+
+- [Recipes](docs/RECIPES.md)
+- [Use Cases](docs/USE-CASES.md)
+- [Contributing](docs/CONTRIBUTING.md)
+
+Internal planning docs live under `docs/plans/`.
 
 ## Safety Notes
 

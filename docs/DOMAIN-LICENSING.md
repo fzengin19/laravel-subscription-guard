@@ -236,3 +236,5 @@ Use the adjacent references when you need more context:
 - [Domain Billing](DOMAIN-BILLING.md)
 - [Data Model](DATA-MODEL.md)
 - [Events And Jobs](EVENTS-AND-JOBS.md)
+- [Metered Billing](METERED-BILLING.md)
+- [Seat-Based Billing](SEAT-BASED-BILLING.md)
