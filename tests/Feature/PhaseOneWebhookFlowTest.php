@@ -8,18 +8,24 @@ use Illuminate\Testing\TestResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\FinalizeWebhookEventJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
 
-function sendWebhook(string $provider, array $payload): TestResponse
+function sendWebhook(string $provider, array $payload, array $headers = []): TestResponse
 {
+    $serverHeaders = [
+        'CONTENT_TYPE' => 'application/json',
+        'HTTP_ACCEPT' => 'application/json',
+    ];
+
+    foreach ($headers as $key => $value) {
+        $serverHeaders['HTTP_'.strtoupper(str_replace('-', '_', $key))] = $value;
+    }
+
     $request = Request::create(
         '/subguard/webhooks/'.$provider,
         'POST',
         [],
         [],
         [],
-        [
-            'CONTENT_TYPE' => 'application/json',
-            'HTTP_ACCEPT' => 'application/json',
-        ],
+        $serverHeaders,
         (string) json_encode($payload)
     );
 
@@ -27,6 +33,11 @@ function sendWebhook(string $provider, array $payload): TestResponse
 
     return TestResponse::fromBaseResponse($response);
 }
+
+beforeEach(function (): void {
+    config()->set('subscription-guard.providers.drivers.iyzico.mock', true);
+    config()->set('subscription-guard.providers.drivers.paytr.mock', true);
+});
 
 it('stores webhook call and dispatches finalization job', function (): void {
     Bus::fake();

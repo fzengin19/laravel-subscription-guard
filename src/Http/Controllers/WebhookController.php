@@ -37,6 +37,24 @@ final class WebhookController
             return response()->json(['status' => 'rejected', 'reason' => 'Empty payload.'], 400);
         }
 
+        try {
+            $providerAdapter = $this->paymentManager->provider($provider);
+        } catch (\Throwable) {
+            return response()->json([
+                'status' => 'rejected',
+                'reason' => 'Provider not available.',
+            ], 422);
+        }
+
+        $signatureHeader = $this->resolveSignatureHeader($request, $provider);
+
+        if (! $providerAdapter->validateWebhook($payload, $signatureHeader)) {
+            return response()->json([
+                'status' => 'rejected',
+                'reason' => 'Invalid webhook signature.',
+            ], 401);
+        }
+
         $eventType = $this->resolveEventType($payload);
         $eventId = $this->resolveEventId($provider, $payload, $eventType, $request->getContent());
 
@@ -69,7 +87,7 @@ final class WebhookController
                                 'event_type' => $eventType,
                                 'idempotency_key' => $request->header('x-idempotency-key'),
                                 'payload' => $payload,
-                                'headers' => $request->headers->all(),
+                                'headers' => $this->filterHeaders($request),
                             ]);
 
                             return [
@@ -92,7 +110,7 @@ final class WebhookController
                         'event_id' => $eventId,
                         'idempotency_key' => $request->header('x-idempotency-key'),
                         'payload' => $payload,
-                        'headers' => $request->headers->all(),
+                        'headers' => $this->filterHeaders($request),
                         'status' => 'pending',
                     ]);
 
@@ -139,6 +157,55 @@ final class WebhookController
             'event_id' => $eventId,
             'duplicate' => (bool) ($result['duplicate'] ?? false),
         ], (bool) ($result['duplicate'] ?? false) ? 200 : 202);
+    }
+
+    private function resolveSignatureHeader(Request $request, string $provider): string
+    {
+        $configuredHeader = (string) config("subscription-guard.providers.drivers.{$provider}.webhook_signature_header", '');
+
+        if ($configuredHeader !== '') {
+            $value = (string) $request->header($configuredHeader, '');
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        $fallbackHeaders = [
+            'x-iyz-signature',
+            'x-iyz-signature-v3',
+            'x-paytr-signature',
+            'x-webhook-signature',
+            'x-signature',
+        ];
+
+        foreach ($fallbackHeaders as $header) {
+            $value = (string) $request->header($header, '');
+
+            if ($value !== '') {
+                return $value;
+            }
+        }
+
+        return '';
+    }
+
+    private function filterHeaders(Request $request): array
+    {
+        $sensitiveHeaders = [
+            'authorization',
+            'cookie',
+            'set-cookie',
+            'proxy-authorization',
+        ];
+
+        $headers = $request->headers->all();
+
+        foreach ($sensitiveHeaders as $header) {
+            unset($headers[$header]);
+        }
+
+        return $headers;
     }
 
     private function resolveEventType(array $payload): string
