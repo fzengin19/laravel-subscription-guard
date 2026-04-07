@@ -15,6 +15,7 @@ it('registers webhook simulator command', function (): void {
 
 it('simulates paytr webhook and dispatches finalize job', function (): void {
     Bus::fake();
+    config()->set('subscription-guard.providers.drivers.paytr.mock', true);
 
     $exitCode = Artisan::call('subguard:simulate-webhook', [
         'provider' => 'paytr',
@@ -29,6 +30,7 @@ it('simulates paytr webhook and dispatches finalize job', function (): void {
 
 it('uses explicit event id and keeps duplicate idempotency semantics', function (): void {
     Bus::fake();
+    config()->set('subscription-guard.providers.drivers.paytr.mock', true);
 
     $eventId = 'phase5-sim-event-001';
 
@@ -55,8 +57,7 @@ it('simulates iyzico webhook with generated signature', function (): void {
     Bus::fake();
 
     config([
-        'subscription-guard.providers.drivers.iyzico.mock' => false,
-        'subscription-guard.providers.drivers.iyzico.secret_key' => 'secret_phase5_test',
+        'subscription-guard.providers.drivers.iyzico.mock' => true,
     ]);
 
     $exitCode = Artisan::call('subguard:simulate-webhook', [

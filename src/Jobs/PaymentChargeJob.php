@@ -90,14 +90,14 @@ final class PaymentChargeJob implements ShouldQueue
                     $subscription->setAttribute('grace_ends_at', null);
 
                     $nextBillingDate = $subscription->getAttribute('next_billing_date');
-                    $anchorDay = $subscription->getAttribute('billing_anchor_day');
-                    $anchor = is_numeric($anchorDay) ? (int) $anchorDay : null;
+                    $billingPeriod = (string) ($subscription->getAttribute('billing_period') ?: 'month');
+                    $billingInterval = max(1, (int) ($subscription->getAttribute('billing_interval') ?: 1));
+                    $anchorDay = is_numeric($subscription->getAttribute('billing_anchor_day'))
+                        ? (int) $subscription->getAttribute('billing_anchor_day')
+                        : null;
 
                     if ($nextBillingDate instanceof Carbon) {
-                        $next = $nextBillingDate->copy()->addMonthNoOverflow();
-                        if ($anchor !== null && $anchor >= 1 && $anchor <= 31) {
-                            $next->day = min($anchor, $next->daysInMonth);
-                        }
+                        $next = $subscriptionService->advanceBillingDate($nextBillingDate, $anchorDay, $billingPeriod, $billingInterval);
                         $subscription->setAttribute('next_billing_date', $next);
                     } else {
                         $subscription->setAttribute('next_billing_date', now()->addMonth());

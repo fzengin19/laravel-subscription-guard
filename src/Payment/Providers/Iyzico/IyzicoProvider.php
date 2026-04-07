@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico;
 
+use Illuminate\Support\Facades\Log;
 use Iyzipay\Model\Address;
 use Iyzipay\Model\AmountBaseRefund;
 use Iyzipay\Model\Buyer;
@@ -30,10 +31,12 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Data\SubscriptionResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Exceptions\UnsupportedProviderOperationException;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Concerns\SanitizesProviderData;
 use Throwable;
 
 final class IyzicoProvider implements PaymentProviderInterface
 {
+    use SanitizesProviderData;
     public function __construct(
         private readonly IyzicoRequestBuilder $requestBuilder,
         private readonly IyzicoCardManager $cardManager,
@@ -67,12 +70,12 @@ final class IyzicoProvider implements PaymentProviderInterface
             try {
                 return $this->livePay($amount, $details, $mode);
             } catch (Throwable $exception) {
-                return new PaymentResponse(false, null, null, null, null, $details, 'Iyzico live payment failed: '.$exception->getMessage());
+                return new PaymentResponse(false, null, null, null, null, $this->sanitizeProviderResponse($details), 'Iyzico live payment failed: '.$this->sanitizeExceptionMessage($exception->getMessage()));
             }
         }
 
         if ($mode === 'checkout_form') {
-            $token = 'cf_'.sha1((string) json_encode($details));
+            $token = 'cf_'.substr(hash('sha256', (string) json_encode($details)), 0, 40);
             $txnId = 'txn_'.$token;
             $callbackUrl = $this->callbackUrl('checkout/callback');
 
@@ -92,7 +95,7 @@ final class IyzicoProvider implements PaymentProviderInterface
         }
 
         if ($mode === '3ds') {
-            $conversationId = (string) ($details['conversation_id'] ?? sha1((string) json_encode($details)));
+            $conversationId = (string) ($details['conversation_id'] ?? substr(hash('sha256', (string) json_encode($details)), 0, 40));
             $txnId = 'txn_3ds_'.$conversationId;
             $callbackUrl = $this->callbackUrl('3ds/callback');
 
@@ -111,7 +114,7 @@ final class IyzicoProvider implements PaymentProviderInterface
             return $response;
         }
 
-        $txnId = 'txn_non3ds_'.sha1((string) json_encode($details).':'.$amount);
+        $txnId = 'txn_non3ds_'.substr(hash('sha256', (string) json_encode($details).':'.$amount), 0, 40);
 
         $response = new PaymentResponse(
             true,
@@ -136,7 +139,7 @@ final class IyzicoProvider implements PaymentProviderInterface
 
             try {
                 $request = new CreateRefundRequest;
-                $request->setConversationId((string) ($transactionId !== '' ? $transactionId : uniqid('iyz_ref_', true)));
+                $request->setConversationId((string) ($transactionId !== '' ? $transactionId : 'iyz_ref_'.bin2hex(random_bytes(8))));
                 $request->setPaymentTransactionId($transactionId);
                 $request->setPrice($this->money($amount));
                 $request->setCurrency((string) ($this->config()['currency'] ?? 'TRY'));
@@ -158,11 +161,11 @@ final class IyzicoProvider implements PaymentProviderInterface
 
                 return new RefundResponse(true, $refundId, $payload);
             } catch (Throwable $exception) {
-                return new RefundResponse(false, null, ['transaction_id' => $transactionId], 'Iyzico live refund failed: '.$exception->getMessage());
+                return new RefundResponse(false, null, ['transaction_id' => $transactionId], 'Iyzico live refund failed: '.$this->sanitizeExceptionMessage($exception->getMessage()));
             }
         }
 
-        return new RefundResponse(true, 'rf_'.sha1($transactionId.':'.(string) $amount), ['transaction_id' => $transactionId, 'amount' => (float) $amount]);
+        return new RefundResponse(true, 'rf_'.substr(hash('sha256', $transactionId.':'.(string) $amount), 0, 40), ['transaction_id' => $transactionId, 'amount' => (float) $amount]);
     }
 
     private function refundByPaymentId(string $paymentId, int|float|string $amount): ?RefundResponse
@@ -172,7 +175,7 @@ final class IyzicoProvider implements PaymentProviderInterface
         }
 
         $request = new AmountBaseRefundRequest;
-        $request->setConversationId(uniqid('iyz_amount_ref_', true));
+        $request->setConversationId('iyz_amount_ref_'.bin2hex(random_bytes(8)));
         $request->setPaymentId($paymentId);
         $request->setPrice((float) $this->money($amount));
         $request->setIp('127.0.0.1');
@@ -208,7 +211,7 @@ final class IyzicoProvider implements PaymentProviderInterface
                 $details = $this->ensureRemoteCardTokens($details);
 
                 $request = new SubscriptionCreateRequest;
-                $request->setConversationId((string) ($details['conversation_id'] ?? uniqid('iyz_sub_', true)));
+                $request->setConversationId((string) ($details['conversation_id'] ?? 'iyz_sub_'.bin2hex(random_bytes(8))));
                 $request->setPricingPlanReferenceCode($pricingPlanReference);
                 $request->setSubscriptionInitialStatus((string) ($details['subscription_initial_status'] ?? 'PENDING'));
                 $request->setPaymentCard($this->subscriptionPaymentCard($details));
@@ -231,12 +234,12 @@ final class IyzicoProvider implements PaymentProviderInterface
 
                 return new SubscriptionResponse(true, $subscriptionId, $status !== '' ? strtolower($status) : SubscriptionStatus::Active->value, $payload);
             } catch (Throwable $exception) {
-                return new SubscriptionResponse(false, null, null, ['plan' => $plan, 'details' => $details], 'Iyzico live subscription create failed: '.$exception->getMessage());
+                return new SubscriptionResponse(false, null, null, $this->sanitizeProviderResponse(['plan' => $plan, 'details' => $details]), 'Iyzico live subscription create failed: '.$this->sanitizeExceptionMessage($exception->getMessage()));
             }
         }
 
-        $seed = (string) ($plan['slug'] ?? $plan['id'] ?? uniqid('sub', true));
-        $subscriptionId = 'iyz_sub_'.sha1($seed);
+        $seed = (string) ($plan['slug'] ?? $plan['id'] ?? 'sub_'.bin2hex(random_bytes(8)));
+        $subscriptionId = 'iyz_sub_'.substr(hash('sha256', $seed), 0, 40);
 
         $response = new SubscriptionResponse(
             true,
@@ -261,7 +264,7 @@ final class IyzicoProvider implements PaymentProviderInterface
 
             try {
                 $request = new SubscriptionCancelRequest;
-                $request->setConversationId((string) uniqid('iyz_cancel_', true));
+                $request->setConversationId((string) 'iyz_cancel_'.bin2hex(random_bytes(8)));
                 $request->setSubscriptionReferenceCode($subscriptionId);
 
                 $response = SubscriptionCancel::cancel($request, $this->options());
@@ -290,7 +293,7 @@ final class IyzicoProvider implements PaymentProviderInterface
 
             try {
                 $request = new SubscriptionUpgradeRequest;
-                $request->setConversationId((string) uniqid('iyz_upgrade_', true));
+                $request->setConversationId((string) 'iyz_upgrade_'.bin2hex(random_bytes(8)));
                 $request->setSubscriptionReferenceCode($subscriptionId);
                 $request->setNewPricingPlanReferenceCode((string) $newPlanId);
 
@@ -309,7 +312,7 @@ final class IyzicoProvider implements PaymentProviderInterface
 
                 return new SubscriptionResponse(true, $subscriptionId, $status !== '' ? strtolower($status) : SubscriptionStatus::Active->value, $payload);
             } catch (Throwable $exception) {
-                return new SubscriptionResponse(false, null, null, ['mode' => $mode], 'Iyzico live subscription upgrade failed: '.$exception->getMessage());
+                return new SubscriptionResponse(false, null, null, ['mode' => $mode], 'Iyzico live subscription upgrade failed: '.$this->sanitizeExceptionMessage($exception->getMessage()));
             }
         }
 
@@ -324,6 +327,11 @@ final class IyzicoProvider implements PaymentProviderInterface
     public function validateWebhook(array $payload, string $signature): bool
     {
         if ($this->mockMode()) {
+            if (app()->environment('production')) {
+                Log::channel((string) config('subscription-guard.logging.channel', 'subguard'))
+                    ->critical('Iyzico webhook signature validation bypassed: mock mode is active in production.');
+            }
+
             return true;
         }
 
@@ -402,7 +410,11 @@ final class IyzicoProvider implements PaymentProviderInterface
             amount: $this->extractFloat($payload, ['paid_price', 'price', 'amount', 'data.amount']),
             status: $status,
             nextBillingDate: $nextBillingDate,
-            metadata: $payload,
+            metadata: array_intersect_key($payload, array_flip([
+                'iyziEventType', 'iyziReferenceCode', 'subscriptionReferenceCode',
+                'orderReferenceCode', 'paymentId', 'status', 'price', 'currency',
+                'token', 'paymentConversationId', 'event_type', 'id',
+            ])),
         );
     }
 
@@ -464,11 +476,11 @@ final class IyzicoProvider implements PaymentProviderInterface
 
         if ($mode === 'checkout_form') {
             $request = new CreateCheckoutFormInitializeRequest;
-            $request->setConversationId((string) ($details['conversation_id'] ?? uniqid('iyz_cf_', true)));
+            $request->setConversationId((string) ($details['conversation_id'] ?? 'iyz_cf_'.bin2hex(random_bytes(8))));
             $request->setPrice($this->money($amount));
             $request->setPaidPrice($this->money($amount));
             $request->setCurrency((string) ($details['currency'] ?? 'TRY'));
-            $request->setBasketId((string) ($details['basket_id'] ?? uniqid('basket_', true)));
+            $request->setBasketId((string) ($details['basket_id'] ?? 'basket_'.bin2hex(random_bytes(8))));
             $request->setCallbackUrl($this->callbackUrl('checkout/callback'));
             $request->setPaymentGroup((string) ($details['payment_group'] ?? 'PRODUCT'));
             $request->setBuyer($this->buyer($details));
@@ -490,14 +502,14 @@ final class IyzicoProvider implements PaymentProviderInterface
         }
 
         $request = new CreatePaymentRequest;
-        $request->setConversationId((string) ($details['conversation_id'] ?? uniqid('iyz_pay_', true)));
+        $request->setConversationId((string) ($details['conversation_id'] ?? 'iyz_pay_'.bin2hex(random_bytes(8))));
         $request->setPrice($this->money($amount));
         $request->setPaidPrice($this->money($amount));
         $request->setCurrency((string) ($details['currency'] ?? 'TRY'));
         $request->setInstallment((int) ($details['installment'] ?? 1));
         $request->setPaymentChannel((string) ($details['payment_channel'] ?? 'WEB'));
         $request->setPaymentGroup((string) ($details['payment_group'] ?? 'PRODUCT'));
-        $request->setBasketId((string) ($details['basket_id'] ?? uniqid('basket_', true)));
+        $request->setBasketId((string) ($details['basket_id'] ?? 'basket_'.bin2hex(random_bytes(8))));
         $request->setPaymentCard($this->paymentCard($details));
         $request->setBuyer($this->buyer($details));
         $request->setShippingAddress($this->address($details, 'shipping_address'));

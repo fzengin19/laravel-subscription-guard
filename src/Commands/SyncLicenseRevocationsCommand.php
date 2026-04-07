@@ -24,6 +24,14 @@ final class SyncLicenseRevocationsCommand extends Command
             return self::FAILURE;
         }
 
+        $validationError = $this->validateEndpoint($endpoint);
+
+        if ($validationError !== null) {
+            $this->error($validationError);
+
+            return self::FAILURE;
+        }
+
         $timeout = $this->resolveTimeout();
         $token = $this->resolveToken();
 
@@ -115,6 +123,35 @@ final class SyncLicenseRevocationsCommand extends Command
         }
 
         return max(1, (int) config('subscription-guard.license.revocation.sync_timeout_seconds', 10));
+    }
+
+    private function validateEndpoint(string $endpoint): ?string
+    {
+        if (! filter_var($endpoint, FILTER_VALIDATE_URL)) {
+            return 'Invalid URL format.';
+        }
+
+        $parsed = parse_url($endpoint);
+        $scheme = strtolower($parsed['scheme'] ?? '');
+        $host = $parsed['host'] ?? '';
+
+        if (app()->environment('production') && $scheme !== 'https') {
+            return 'HTTPS is required for revocation sync endpoints in production.';
+        }
+
+        if (! in_array($scheme, ['http', 'https'], true)) {
+            return 'Only HTTP/HTTPS schemes are allowed.';
+        }
+
+        if ($host !== '' && $host !== 'localhost') {
+            $ip = gethostbyname($host);
+
+            if ($ip !== $host && filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE) === false) {
+                return 'Endpoint resolves to a private or reserved IP range. This is not allowed.';
+            }
+        }
+
+        return null;
     }
 
     private function normalizeIds(mixed $value): array

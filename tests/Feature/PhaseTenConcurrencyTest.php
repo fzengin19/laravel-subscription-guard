@@ -17,10 +17,12 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
 
 beforeEach(function (): void {
     config()->set('subscription-guard.providers.drivers.dummy', [
-        'class' => null,
+        'class' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider::class,
+        'mock' => true,
         'manages_own_billing' => false,
         'webhook_response_format' => 'json',
     ]);
+    config()->set('subscription-guard.providers.drivers.iyzico.mock', true);
 });
 
 // ---------------------------------------------------------------------------

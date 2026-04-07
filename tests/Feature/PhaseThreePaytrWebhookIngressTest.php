@@ -9,6 +9,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\FinalizeWebhookEventJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
 
 it('returns plain OK for paytr webhook ingress and queues finalization', function (): void {
+    config()->set('subscription-guard.providers.drivers.paytr.mock', true);
     Queue::fake();
 
     $request = Request::create('/subguard/webhooks/paytr', 'POST', [

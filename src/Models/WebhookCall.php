@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WebhookCall extends Model
 {
-    protected $guarded = ['id'];
+    protected $guarded = ['id', 'processed_at', 'failure_reason'];
 
     public function markFailed(string $message): void
     {

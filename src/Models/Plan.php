@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Plan extends Model
 {
-    protected $guarded = ['id'];
+    protected $guarded = ['id', 'is_active'];
 
     protected function casts(): array
     {

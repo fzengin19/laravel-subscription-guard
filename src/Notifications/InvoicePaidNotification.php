@@ -36,14 +36,11 @@ final class InvoicePaidNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $recipientType = get_class($notifiable);
-
         $message = (new MailMessage)
             ->subject('Invoice paid: '.$this->invoiceNumber)
             ->line('Your subscription invoice has been paid successfully.')
             ->line('Invoice: '.$this->invoiceNumber)
-            ->line('Amount: '.number_format($this->amount, 2).' '.$this->currency)
-            ->line('Recipient type: '.$recipientType);
+            ->line('Amount: '.number_format($this->amount, 2).' '.$this->currency);
 
         if ($this->pdfPath !== null && $this->pdfPath !== '') {
             $message->line('PDF: '.$this->pdfPath);
@@ -56,7 +53,7 @@ final class InvoicePaidNotification extends Notification implements ShouldQueue
     {
         return [
             'type' => 'invoice.paid',
-            'recipient_type' => get_class($notifiable),
+            'recipient_type' => 'user',
             'invoice_number' => $this->invoiceNumber,
             'amount' => $this->amount,
             'currency' => $this->currency,
