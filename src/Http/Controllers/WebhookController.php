@@ -37,6 +37,15 @@ final class WebhookController
             return response()->json(['status' => 'rejected', 'reason' => 'Empty payload.'], 400);
         }
 
+        $maxPayloadKb = (int) config('subscription-guard.webhooks.max_payload_size_kb', 64);
+
+        if ($maxPayloadKb > 0 && strlen($request->getContent() ?: '') > $maxPayloadKb * 1024) {
+            return response()->json([
+                'status' => 'rejected',
+                'reason' => 'Payload exceeds maximum size.',
+            ], 413);
+        }
+
         try {
             $providerAdapter = $this->paymentManager->provider($provider);
         } catch (\Throwable) {

@@ -9,7 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Coupon extends Model
 {
-    protected $guarded = ['id'];
+    protected $guarded = ['id', 'current_uses', 'is_active'];
 
     protected function casts(): array
     {

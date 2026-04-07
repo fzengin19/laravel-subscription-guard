@@ -13,7 +13,7 @@ class Invoice extends Model
 {
     use SoftDeletes;
 
-    protected $guarded = ['id'];
+    protected $guarded = ['id', 'status'];
 
     protected function casts(): array
     {

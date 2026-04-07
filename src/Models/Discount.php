@@ -10,7 +10,7 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 
 class Discount extends Model
 {
-    protected $guarded = ['id'];
+    protected $guarded = ['id', 'applied_cycles'];
 
     protected function casts(): array
     {

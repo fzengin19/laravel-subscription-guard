@@ -26,11 +26,11 @@ class PaytrProvider implements PaymentProviderInterface
         $request = PaytrPaymentRequest::fromArray(array_merge($details, ['amount' => $amount]));
 
         if ($this->mockMode()) {
-            $token = 'paytr_iframe_'.uniqid();
+            $token = 'paytr_iframe_'.bin2hex(random_bytes(8));
 
             return (new PaytrPaymentResponse(
                 success: true,
-                transactionId: 'paytr_mock_'.uniqid(),
+                transactionId: 'paytr_mock_'.bin2hex(random_bytes(8)),
                 iframeToken: $token,
                 iframeUrl: 'https://www.paytr.com/odeme/'.$token,
                 raw: [
@@ -64,7 +64,7 @@ class PaytrProvider implements PaymentProviderInterface
     public function refund(string $transactionId, int|float|string $amount): RefundResponse
     {
         if ($this->mockMode()) {
-            return new RefundResponse(true, 'paytr_refund_'.uniqid(), ['provider' => 'paytr', 'mock' => true]);
+            return new RefundResponse(true, 'paytr_refund_'.bin2hex(random_bytes(8)), ['provider' => 'paytr', 'mock' => true]);
         }
 
         $refundId = 'paytr_live_refund_'.substr(hash('sha256', $transactionId.':'.(string) $amount), 0, 16);
@@ -85,7 +85,7 @@ class PaytrProvider implements PaymentProviderInterface
 
             return new SubscriptionResponse(
                 success: true,
-                subscriptionId: 'paytr_sub_'.uniqid(),
+                subscriptionId: 'paytr_sub_'.bin2hex(random_bytes(8)),
                 status: $status,
                 providerResponse: [
                     'provider' => 'paytr',
@@ -136,7 +136,7 @@ class PaytrProvider implements PaymentProviderInterface
         if ($this->mockMode()) {
             return new PaymentResponse(
                 success: true,
-                transactionId: 'paytr_recurring_'.uniqid(),
+                transactionId: 'paytr_recurring_'.bin2hex(random_bytes(8)),
                 providerResponse: [
                     'provider' => 'paytr',
                     'mock' => true,
@@ -236,7 +236,10 @@ class PaytrProvider implements PaymentProviderInterface
             transactionId: $transactionId,
             amount: $this->normalizeAmount($payload),
             status: $normalizedStatus,
-            metadata: $payload,
+            metadata: array_intersect_key($payload, array_flip([
+                'merchant_oid', 'status', 'total_amount', 'currency',
+                'payment_type', 'payment_amount', 'payment_id', 'event_id',
+            ])),
         );
     }
 
@@ -299,7 +302,7 @@ class PaytrProvider implements PaymentProviderInterface
 
     private function liveToken(array $payload): string
     {
-        $seed = hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES).':'.microtime(true));
+        $seed = hash('sha256', json_encode($payload, JSON_UNESCAPED_SLASHES).':'.bin2hex(random_bytes(16)));
 
         return 'paytr_iframe_'.substr($seed, 0, 16);
     }
