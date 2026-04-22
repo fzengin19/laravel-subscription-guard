@@ -9,9 +9,10 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\PaymentCompleted;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\SubscriptionRenewed;
@@ -41,7 +42,7 @@ final class PaymentChargeJob implements ShouldQueue
         }
 
         try {
-            $preparedCharge = $this->prepareChargePayload();
+            $preparedCharge = $this->prepareChargePayload($paymentManager);
 
             if ($preparedCharge === null) {
                 return;
@@ -86,7 +87,10 @@ final class PaymentChargeJob implements ShouldQueue
 
                     $amount = (float) $transaction->getAttribute('amount');
 
-                    $subscription->setAttribute('status', SubscriptionStatus::Active->value);
+                    if (! $subscriptionService->applySubscriptionStatus($subscription, SubscriptionStatus::Active, 'charge_job.success')) {
+                        return;
+                    }
+
                     $subscription->setAttribute('grace_ends_at', null);
 
                     $nextBillingDate = $subscription->getAttribute('next_billing_date');
@@ -139,13 +143,13 @@ final class PaymentChargeJob implements ShouldQueue
                 );
 
                 if (in_array((string) $subscription->getAttribute('status'), [SubscriptionStatus::Active->value, 'trialing'], true)) {
-                    $subscription->setAttribute('status', SubscriptionStatus::PastDue->value);
+                    if ($subscriptionService->applySubscriptionStatus($subscription, SubscriptionStatus::PastDue, 'charge_job.failure')) {
+                        if ($subscription->getAttribute('grace_ends_at') === null) {
+                            $subscription->setAttribute('grace_ends_at', now()->addDays((int) config('subscription-guard.billing.grace_period_days', 7)));
+                        }
 
-                    if ($subscription->getAttribute('grace_ends_at') === null) {
-                        $subscription->setAttribute('grace_ends_at', now()->addDays((int) config('subscription-guard.billing.grace_period_days', 7)));
+                        $subscription->save();
                     }
-
-                    $subscription->save();
                 }
 
                 DispatchBillingNotificationsJob::dispatch('payment.failed', [
@@ -160,9 +164,9 @@ final class PaymentChargeJob implements ShouldQueue
         }
     }
 
-    private function prepareChargePayload(): ?array
+    private function prepareChargePayload(PaymentManager $paymentManager): ?array
     {
-        return DB::transaction(function (): ?array {
+        return DB::transaction(function () use ($paymentManager): ?array {
             $transaction = Transaction::query()
                 ->lockForUpdate()
                 ->find($this->transactionId);
@@ -174,6 +178,21 @@ final class PaymentChargeJob implements ShouldQueue
             $status = (string) $transaction->getAttribute('status');
 
             if (in_array($status, ['processed', 'succeeded', 'refunded', 'processing'], true)) {
+                return null;
+            }
+
+            $provider = (string) $transaction->getAttribute('provider');
+
+            if ($provider !== '' && $paymentManager->managesOwnBilling($provider)) {
+                $transaction->setAttribute('next_retry_at', null);
+                $transaction->markFailed('Provider-managed billing; local recurring charge skipped.', (int) $transaction->getAttribute('retry_count'));
+
+                Log::channel((string) config('subscription-guard.logging.payments_channel', 'subguard_payments'))
+                    ->warning('PaymentChargeJob skipped for provider-managed transaction.', [
+                        'provider' => $provider,
+                        'transaction_id' => $transaction->getKey(),
+                    ]);
+
                 return null;
             }
 
@@ -198,7 +217,7 @@ final class PaymentChargeJob implements ShouldQueue
             $transaction->markProcessing();
 
             return [
-                'provider' => (string) $transaction->getAttribute('provider'),
+                'provider' => $provider,
                 'amount' => (float) $transaction->getAttribute('amount'),
                 'idempotency_key' => (string) $transaction->getKey(),
                 'charge_payload' => [

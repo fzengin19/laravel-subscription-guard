@@ -72,7 +72,7 @@ it('suspends subscription when retry_count reaches max retries', function (): vo
     ]));
 
     $job = new ProcessDunningRetryJob((int) $transaction->getKey());
-    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
 
     $subscription->refresh();
     expect((string) $subscription->getAttribute('status'))->toBe('suspended');
@@ -136,7 +136,7 @@ it('suspends associated license when dunning is exhausted', function (): void {
     ]));
 
     $job = new ProcessDunningRetryJob((int) $transaction->getKey());
-    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
 
     $license->refresh();
     expect((string) $license->getAttribute('status'))->toBe('suspended');
@@ -194,7 +194,7 @@ it('dispatches DunningExhausted event with correct payload', function (): void {
     ]));
 
     $job = new ProcessDunningRetryJob((int) $transaction->getKey());
-    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
 
     Event::assertDispatched(DunningExhausted::class, function (DunningExhausted $event) use ($subscription, $transaction): bool {
         return $event->provider === 'paytr'
@@ -252,7 +252,7 @@ it('dispatches DispatchBillingNotificationsJob for dunning.exhausted', function 
     ]));
 
     $job = new ProcessDunningRetryJob((int) $transaction->getKey());
-    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
 
     Queue::assertPushed(DispatchBillingNotificationsJob::class, function (DispatchBillingNotificationsJob $job): bool {
         return $job->event === 'dunning.exhausted';
@@ -307,7 +307,7 @@ it('clears next_retry_at to null when dunning is exhausted', function (): void {
     ]));
 
     $job = new ProcessDunningRetryJob((int) $transaction->getKey());
-    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
 
     $transaction->refresh();
     expect($transaction->getAttribute('next_retry_at'))->toBeNull();
@@ -360,7 +360,7 @@ it('dispatches PaymentChargeJob when retry_count is below max retries', function
     ]));
 
     $job = new ProcessDunningRetryJob((int) $transaction->getKey());
-    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
 
     Bus::assertDispatched(PaymentChargeJob::class, function (PaymentChargeJob $job) use ($transaction): bool {
         return (string) $job->transactionId === (string) $transaction->getKey();
@@ -425,7 +425,7 @@ it('respects configurable max retries where higher limit allows continued retrie
     ]));
 
     $job = new ProcessDunningRetryJob((int) $transaction->getKey());
-    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
 
     Bus::assertDispatched(PaymentChargeJob::class);
 
@@ -485,7 +485,7 @@ it('suspends when retry_count equals configurable max retries', function (): voi
     ]));
 
     $job = new ProcessDunningRetryJob((int) $transaction->getKey());
-    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+    $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
 
     $subscription->refresh();
     expect((string) $subscription->getAttribute('status'))->toBe('suspended');

@@ -5,12 +5,19 @@ declare(strict_types=1);
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico;
 
 use Iyzipay\Options as IyzipayOptions;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\ProviderMockModeGuard;
 
 final class IyzicoSupport
 {
     public function mockMode(): bool
     {
-        return (bool) ($this->config()['mock'] ?? false);
+        $enabled = (bool) ($this->config()['mock'] ?? false);
+
+        if ($enabled) {
+            ProviderMockModeGuard::ensureNotProduction('iyzico');
+        }
+
+        return $enabled;
     }
 
     public function missingCredentials(): array
