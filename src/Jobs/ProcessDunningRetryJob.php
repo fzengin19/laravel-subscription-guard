@@ -18,6 +18,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Models\License;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
 final class ProcessDunningRetryJob implements ShouldQueue
 {
@@ -31,7 +32,7 @@ final class ProcessDunningRetryJob implements ShouldQueue
         $this->onQueue((string) config('subscription-guard.queue.queue', 'subguard-main'));
     }
 
-    public function handle(PaymentManager $paymentManager): void
+    public function handle(PaymentManager $paymentManager, SubscriptionService $subscriptionService): void
     {
         $lock = cache()->lock('subguard:dunning:'.$this->transactionId, 30);
 
@@ -40,7 +41,7 @@ final class ProcessDunningRetryJob implements ShouldQueue
         }
 
         try {
-            DB::transaction(function () use ($paymentManager): void {
+            DB::transaction(function () use ($paymentManager, $subscriptionService): void {
                 $transaction = Transaction::query()
                     ->lockForUpdate()
                     ->find($this->transactionId);
@@ -55,11 +56,26 @@ final class ProcessDunningRetryJob implements ShouldQueue
                     return;
                 }
 
+                $provider = (string) $transaction->getAttribute('provider');
+
+                if ($provider !== '' && $paymentManager->managesOwnBilling($provider)) {
+                    $transaction->setAttribute('next_retry_at', null);
+                    $transaction->save();
+
+                    Log::channel((string) config('subscription-guard.logging.payments_channel', 'subguard_payments'))
+                        ->warning('Dunning retry skipped for provider-managed transaction.', [
+                            'provider' => $provider,
+                            'transaction_id' => $transaction->getKey(),
+                        ]);
+
+                    return;
+                }
+
                 $retryCount = (int) $transaction->getAttribute('retry_count');
                 $maxRetries = (int) config('subscription-guard.billing.max_dunning_retries', 3);
 
                 if ($retryCount >= $maxRetries) {
-                    $this->handleDunningExhaustion($transaction, $paymentManager);
+                    $this->handleDunningExhaustion($transaction, $paymentManager, $subscriptionService);
 
                     return;
                 }
@@ -74,7 +90,7 @@ final class ProcessDunningRetryJob implements ShouldQueue
         }
     }
 
-    private function handleDunningExhaustion(Transaction $transaction, PaymentManager $paymentManager): void
+    private function handleDunningExhaustion(Transaction $transaction, PaymentManager $paymentManager, SubscriptionService $subscriptionService): void
     {
         $transaction->setAttribute('next_retry_at', null);
         $transaction->save();
@@ -88,19 +104,20 @@ final class ProcessDunningRetryJob implements ShouldQueue
                 ->find((int) $subscriptionId);
 
             if ($subscription instanceof Subscription) {
-                $subscription->setAttribute('status', SubscriptionStatus::Suspended->value);
-                $subscription->save();
+                if ($subscriptionService->applySubscriptionStatus($subscription, SubscriptionStatus::Suspended, 'dunning.exhausted')) {
+                    $subscription->save();
 
-                $licenseId = $subscription->getAttribute('license_id');
+                    $licenseId = $subscription->getAttribute('license_id');
 
-                if (is_numeric($licenseId)) {
-                    $license = License::query()
-                        ->lockForUpdate()
-                        ->find((int) $licenseId);
+                    if (is_numeric($licenseId)) {
+                        $license = License::query()
+                            ->lockForUpdate()
+                            ->find((int) $licenseId);
 
-                    if ($license instanceof License) {
-                        $license->setAttribute('status', SubscriptionStatus::Suspended->value);
-                        $license->save();
+                        if ($license instanceof License) {
+                            $license->setAttribute('status', SubscriptionStatus::Suspended->value);
+                            $license->save();
+                        }
                     }
                 }
             }

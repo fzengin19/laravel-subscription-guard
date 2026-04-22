@@ -238,7 +238,7 @@ it('skips dunning retry processing when the cache lock is already held', functio
 
     try {
         $job = new ProcessDunningRetryJob($transaction->getKey());
-        $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class));
+        $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
     } finally {
         $lock->release();
     }

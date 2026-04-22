@@ -6,8 +6,10 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Subscription;
 
 use DateTimeInterface;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Log;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\ProviderEventDispatcherInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\SubscriptionServiceInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\DiscountResult;
@@ -95,15 +97,103 @@ final class SubscriptionService implements SubscriptionServiceInterface
             return false;
         }
 
-        try {
-            $subscription->transitionTo(SubscriptionStatus::Cancelled);
-        } catch (SubGuardException) {
+        if ((string) $subscription->getAttribute('status') === SubscriptionStatus::Cancelled->value) {
+            return true;
+        }
+
+        $lock = Cache::lock('subguard:subscription-cancel:'.$subscription->getKey(), 30);
+
+        if (! $lock->get()) {
             return false;
         }
 
-        $subscription->setAttribute('cancelled_at', now());
+        try {
+            $provider = (string) $subscription->getAttribute('provider');
+            $providerSubscriptionId = (string) ($subscription->getAttribute('provider_subscription_id') ?? '');
+            $providerManaged = $provider !== '' && $this->paymentManager->managesOwnBilling($provider);
 
-        return $subscription->save();
+            if ($providerManaged && $providerSubscriptionId !== '') {
+                try {
+                    $remoteOk = $this->paymentManager->provider($provider)->cancelSubscription($providerSubscriptionId);
+                } catch (\Throwable $exception) {
+                    Log::channel((string) config('subscription-guard.logging.payments_channel', 'subguard_payments'))
+                        ->warning('Provider cancellation threw; aborting local cancellation.', [
+                            'provider' => $provider,
+                            'subscription_id' => $subscription->getKey(),
+                            'error' => $exception->getMessage(),
+                        ]);
+
+                    return false;
+                }
+
+                if (! $remoteOk) {
+                    Log::channel((string) config('subscription-guard.logging.payments_channel', 'subguard_payments'))
+                        ->warning('Provider cancellation returned false; local subscription left untouched.', [
+                            'provider' => $provider,
+                            'subscription_id' => $subscription->getKey(),
+                        ]);
+
+                    return false;
+                }
+            } elseif ($providerManaged && $providerSubscriptionId === '') {
+                $currentStatus = (string) $subscription->getAttribute('status');
+
+                if (! in_array($currentStatus, [SubscriptionStatus::Pending->value, SubscriptionStatus::Failed->value], true)) {
+                    Log::channel((string) config('subscription-guard.logging.payments_channel', 'subguard_payments'))
+                        ->warning('Provider-managed subscription missing provider_subscription_id; cancellation aborted.', [
+                            'provider' => $provider,
+                            'subscription_id' => $subscription->getKey(),
+                            'status' => $currentStatus,
+                        ]);
+
+                    return false;
+                }
+            }
+
+            return DB::transaction(function () use ($subscription, $provider): bool {
+                $locked = Subscription::query()->lockForUpdate()->find($subscription->getKey());
+
+                if (! $locked instanceof Subscription) {
+                    return false;
+                }
+
+                if ((string) $locked->getAttribute('status') === SubscriptionStatus::Cancelled->value) {
+                    return true;
+                }
+
+                try {
+                    $locked->transitionTo(SubscriptionStatus::Cancelled);
+                } catch (SubGuardException) {
+                    return false;
+                }
+
+                $locked->setAttribute('cancelled_at', now());
+                $saved = $locked->save();
+
+                if (! $saved) {
+                    return false;
+                }
+
+                $providerSubscriptionId = (string) ($locked->getAttribute('provider_subscription_id') ?? '');
+                $providerEvents = $this->providerEventDispatchers->resolve($provider);
+
+                Event::dispatch(new SubscriptionCancelled($provider, $providerSubscriptionId, $locked->getKey()));
+                $providerEvents->dispatch('subscription.cancelled', [
+                    'subscription_id' => $providerSubscriptionId,
+                    'metadata' => [],
+                ]);
+
+                DispatchBillingNotificationsJob::dispatch('subscription.cancelled', [
+                    'provider' => $provider,
+                    'subscription_id' => $locked->getKey(),
+                    'provider_subscription_id' => $providerSubscriptionId,
+                ])->onQueue($this->paymentManager->queueName('notifications_queue', 'subguard-notifications'));
+
+                return true;
+            });
+        } finally {
+            $lock->release();
+        }
     }
 
     public function pause(int|string $subscriptionId): bool
@@ -223,8 +313,6 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $count = 0;
         $formattedDate = Carbon::instance($date)->setTimezone($this->billingTimezone());
 
-        $maxRetries = (int) config('subscription-guard.billing.max_dunning_retries', 3);
-
         $transactions = Transaction::query()
             ->whereIn('status', ['failed', 'retrying'])
             ->whereNotNull('next_retry_at')
@@ -232,6 +320,12 @@ final class SubscriptionService implements SubscriptionServiceInterface
             ->get();
 
         foreach ($transactions as $transaction) {
+            $provider = (string) $transaction->getAttribute('provider');
+
+            if ($provider !== '' && $this->paymentManager->managesOwnBilling($provider)) {
+                continue;
+            }
+
             ProcessDunningRetryJob::dispatch((int) $transaction->getKey())
                 ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
 
@@ -443,7 +537,10 @@ final class SubscriptionService implements SubscriptionServiceInterface
         }
 
         if ($result->success) {
-            $subscription->setAttribute('status', SubscriptionStatus::Active->value);
+            if (! $this->applySubscriptionStatus($subscription, SubscriptionStatus::Active, 'payment_result.success')) {
+                return;
+            }
+
             $subscription->setAttribute('grace_ends_at', null);
             $nextBillingDate = $subscription->getAttribute('next_billing_date');
             $anchorDay = $subscription->getAttribute('billing_anchor_day');
@@ -487,7 +584,9 @@ final class SubscriptionService implements SubscriptionServiceInterface
             return;
         }
 
-        $subscription->setAttribute('status', SubscriptionStatus::PastDue->value);
+        if (! $this->applySubscriptionStatus($subscription, SubscriptionStatus::PastDue, 'payment_result.failure')) {
+            return;
+        }
 
         if ($subscription->getAttribute('grace_ends_at') === null) {
             $subscription->setAttribute('grace_ends_at', now()->addDays((int) config('subscription-guard.billing.grace_period_days', 7)));
@@ -570,6 +669,13 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $resolvedDiscount = $this->resolveRenewalDiscount($subscription, (float) $amount);
         $amount = $resolvedDiscount['amount'];
 
+        $providerManaged = $this->paymentManager->managesOwnBilling($provider);
+        $nextRetryAt = null;
+
+        if (! $success && ! $providerManaged) {
+            $nextRetryAt = now()->addDays((int) config('subscription-guard.billing.dunning_retry_interval_days', 2));
+        }
+
         $transaction = Transaction::unguarded(static fn (): Transaction => Transaction::query()->firstOrCreate(
             ['idempotency_key' => $provider.':webhook:'.$eventId],
             [
@@ -590,7 +696,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 'currency' => (string) $subscription->getAttribute('currency'),
                 'processed_at' => now(),
                 'retry_count' => $success ? 0 : 1,
-                'next_retry_at' => $success ? null : now()->addDays((int) config('subscription-guard.billing.dunning_retry_interval_days', 2)),
+                'next_retry_at' => $nextRetryAt,
                 'last_retry_at' => $success ? null : now(),
                 'provider_response' => $result->metadata,
             ]
@@ -607,7 +713,10 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $providerSubscriptionId = (string) $subscription->getAttribute('provider_subscription_id');
 
         if ($success) {
-            $subscription->setAttribute('status', SubscriptionStatus::Active->value);
+            if (! $this->applySubscriptionStatus($subscription, SubscriptionStatus::Active, 'webhook.order.success')) {
+                return;
+            }
+
             $subscription->setAttribute('grace_ends_at', null);
 
             if ($result->nextBillingDate !== null && $result->nextBillingDate !== '') {
@@ -654,7 +763,9 @@ final class SubscriptionService implements SubscriptionServiceInterface
             return;
         }
 
-        $subscription->setAttribute('status', SubscriptionStatus::PastDue->value);
+        if (! $this->applySubscriptionStatus($subscription, SubscriptionStatus::PastDue, 'webhook.order.failure')) {
+            return;
+        }
 
         if ($subscription->getAttribute('grace_ends_at') === null) {
             $subscription->setAttribute('grace_ends_at', now()->addDays((int) config('subscription-guard.billing.grace_period_days', 7)));
@@ -673,6 +784,39 @@ final class SubscriptionService implements SubscriptionServiceInterface
             'reason' => $result->message,
             'metadata' => $result->metadata,
         ]);
+    }
+
+    public function applySubscriptionStatus(Subscription $subscription, SubscriptionStatus $target, string $source = 'unknown'): bool
+    {
+        $currentRaw = (string) $subscription->getAttribute('status');
+
+        if ($currentRaw === SubscriptionStatus::Cancelled->value && $target !== SubscriptionStatus::Cancelled) {
+            Log::channel((string) config('subscription-guard.logging.payments_channel', 'subguard_payments'))
+                ->info('Ignored status change on cancelled subscription.', [
+                    'subscription_id' => $subscription->getKey(),
+                    'target' => $target->value,
+                    'source' => $source,
+                ]);
+
+            return false;
+        }
+
+        try {
+            $subscription->transitionTo($target);
+        } catch (SubGuardException $exception) {
+            Log::channel((string) config('subscription-guard.logging.payments_channel', 'subguard_payments'))
+                ->info('Subscription status transition rejected.', [
+                    'subscription_id' => $subscription->getKey(),
+                    'from' => $currentRaw,
+                    'target' => $target->value,
+                    'source' => $source,
+                    'error' => $exception->getMessage(),
+                ]);
+
+            return false;
+        }
+
+        return true;
     }
 
     private function billingTimezone(): string

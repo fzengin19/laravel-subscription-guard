@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico;
 
-use Illuminate\Support\Facades\Log;
 use Iyzipay\Model\Address;
 use Iyzipay\Model\AmountBaseRefund;
 use Iyzipay\Model\Buyer;
@@ -327,11 +326,6 @@ final class IyzicoProvider implements PaymentProviderInterface
     public function validateWebhook(array $payload, string $signature): bool
     {
         if ($this->mockMode()) {
-            if (app()->environment('production')) {
-                Log::channel((string) config('subscription-guard.logging.channel', 'subguard'))
-                    ->critical('Iyzico webhook signature validation bypassed: mock mode is active in production.');
-            }
-
             return true;
         }
 

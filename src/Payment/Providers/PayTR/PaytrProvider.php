@@ -4,13 +4,13 @@ declare(strict_types=1);
 
 namespace SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR;
 
-use Illuminate\Support\Facades\Log;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\PaymentProviderInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\RefundResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\SubscriptionResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\ProviderMockModeGuard;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Data\PaytrPaymentRequest;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Data\PaytrPaymentResponse;
 
@@ -167,11 +167,6 @@ class PaytrProvider implements PaymentProviderInterface
     public function validateWebhook(array $payload, string $signature): bool
     {
         if ($this->mockMode()) {
-            if (app()->environment('production')) {
-                Log::channel((string) config('subscription-guard.logging.channel', 'subguard'))
-                    ->critical('PayTR webhook signature validation bypassed: mock mode is active in production.');
-            }
-
             return true;
         }
 
@@ -250,7 +245,13 @@ class PaytrProvider implements PaymentProviderInterface
 
     private function mockMode(): bool
     {
-        return (bool) config('subscription-guard.providers.drivers.paytr.mock', true);
+        $enabled = (bool) config('subscription-guard.providers.drivers.paytr.mock', true);
+
+        if ($enabled) {
+            ProviderMockModeGuard::ensureNotProduction('paytr');
+        }
+
+        return $enabled;
     }
 
     private function webhookHash(array $payload, string $merchantKey, string $merchantSalt): string
