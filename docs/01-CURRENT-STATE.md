@@ -3,15 +3,18 @@
 > Last updated: 2026-05-13
 
 ## Project Mode
-Code — Post-v1.1.0 hardening complete on `fix/post-v1.1.0-hardening`. Awaiting merge + staging validation.
+Code — v1.2.0 released and tagged. v1.3.0 cascade-delete protection in progress on `fix/cascade-delete-protection`.
 
 ## Active Focus
-`fix/post-v1.1.0-hardening` branch closes 9 evidence-based gaps surfaced by a
-deep audit after the v1.1.0 fixes (see
-`docs/plans/2026-05-13-post-v1.1.0-hardening-plan.md`). Three speculative tasks
-(`DB::afterCommit` listener audit, Iyzico cancel idempotency error-code
-mapping, webhook content-type fallback) are deferred to v1.3.0 with explicit
-evidence requirements.
+`fix/cascade-delete-protection` closes a P0 data-loss vector discovered by a
+post-v1.2.0 third-party review: `subscriptions.plan_id`, `licenses.plan_id`,
+`licenses.user_id`, `subscription_items.plan_id` were all `ON DELETE CASCADE`
+— a single `DELETE FROM plans` would physically wipe dependent rows even
+though `softDeletes` traits were declared. Plan: see
+`docs/plans/2026-05-13-cascade-delete-protection-plan.md`. The other v1.3.0
+candidates (DA-01 `DB::afterCommit` listener audit, DA-02 Iyzico cancel
+idempotency error-code mapping) remain pending and require evidence before
+merging.
 
 ## Active Domain / Phase
 Billing + Providers + Webhooks (production-readiness fixes).
@@ -35,7 +38,24 @@ See `docs/02-DECISION-BOARD.md` for full list.
 ## Last Completed Work
 - Documentation Phases 0-6 completed (2026-04-06 to 2026-04-07)
 - Security audit fixes merged to main (32 findings fixed)
-- 2026-05-13: Post-v1.1.0 hardening on `fix/post-v1.1.0-hardening` (v1.2.0):
+- 2026-05-13: Cascade-delete protection on `fix/cascade-delete-protection` (v1.3.0):
+  - **P0 data-loss fix**: new migration `2026_05_13_090000_fix_cascade_delete_protection.php`
+    swaps four foreign keys from `cascadeOnDelete` to `restrictOnDelete`
+    (`subscriptions.plan_id`, `licenses.plan_id`, `licenses.user_id`,
+    `subscription_items.plan_id`). Adds `plans.deleted_at`. Idempotent.
+  - **Plan model**: gains `SoftDeletes` trait. `$plan->delete()` archives;
+    `$plan->forceDelete()` blocked by RESTRICT FKs when dependents exist.
+  - **belongsTo plan() relations**: `Subscription::plan()`,
+    `License::plan()`, `SubscriptionItem::plan()` chain `->withTrashed()`
+    so historical billing keeps resolving archived plans.
+  - **BREAKING**: `User::delete()` no longer cascades to licenses; consuming
+    apps must archive/cancel dependent licenses first. Documented in
+    `CHANGELOG.md` v1.3.0 BREAKING section + `docs/INSTALLATION.md` §8 upgrade
+    note + `docs/SECURITY.md` Cascade-Delete Defense subsection.
+  - **Tests**: `tests/Feature/PhaseFourteenCascadeProtectionTest.php` adds
+    7 regression tests. Full suite 282 passed / 932 assertions. PHPStan
+    level 5 clean.
+- 2026-05-13: Post-v1.1.0 hardening released as v1.2.0 (merged to main):
   - **PHP constraint relaxed** `^8.4` → `^8.3 || ^8.4` (composer.json:19).
     The codebase uses zero PHP 8.4-specific features; the previous constraint
     artificially blocked PHP 8.3 deployments.
@@ -85,18 +105,18 @@ See `docs/02-DECISION-BOARD.md` for full list.
     level 5 clean.
 
 ## Next Tasks
-- Merge `fix/post-v1.1.0-hardening` to main after review.
-- Staging validation: bring up an iyzico sandbox round-trip and confirm
-  trial-expiry, dunning isolation, cancel orchestration, and webhook intake
-  all behave per spec.
-- Schedule `subguard:process-trial-expiry` in the consuming app's cron
-  (every minute or every five minutes is typical).
-- v1.3.0 follow-ups (require evidence before merging):
-  - `DB::afterCommit` event-dispatch refactor (needs a listener audit).
-  - Iyzico cancel idempotency (`already cancelled` / `not found` error code
-    mapping — needs sandbox or vendor verification).
+- Merge `fix/cascade-delete-protection` to main after review.
+- Tag v1.3.0 and publish GitHub release.
+- Staging validation: confirm `User::delete()` / plan-delete UI paths in the
+  consuming app surface `QueryException` instead of silent data wipe.
+- Remaining v1.3.0+ follow-ups (require evidence before merging):
+  - DA-01 `DB::afterCommit` event-dispatch refactor (needs a listener audit).
+  - DA-02 Iyzico cancel idempotency (`already cancelled` / `not found` error
+    code mapping — needs sandbox or vendor verification).
 
 ## Open Questions / Blockers
-- None blocking merge for v1.2.0. v1.3.0 candidates have explicit evidence
-  requirements documented in
-  `docs/plans/2026-05-13-post-v1.1.0-hardening-plan.md` revision log.
+- None blocking merge for v1.3.0 cascade-protection. Remaining candidates
+  have explicit evidence requirements documented in
+  `docs/plans/2026-05-13-post-v1.1.0-hardening-plan.md` revision log and
+  `docs/plans/2026-05-13-cascade-delete-protection-plan.md` "Out of scope"
+  section.

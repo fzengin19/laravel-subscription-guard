@@ -2,7 +2,20 @@
 
 Use this document to understand the package's security posture, built-in protections, and operational security considerations.
 
-## Production Hardening (v1.1.0 + v1.2.0)
+## Production Hardening (v1.1.0 + v1.2.0 + v1.3.0)
+
+### Cascade-Delete Defense (v1.3.0)
+
+The package defines `RESTRICT` foreign keys on parent references that, if violated, would silently destroy billing audit data:
+
+- `subscriptions.plan_id → plans.id`
+- `licenses.plan_id → plans.id`
+- `licenses.user_id → users.id`
+- `subscription_items.plan_id → plans.id`
+
+A `DELETE FROM plans WHERE id = ?` or `User::delete()` will now throw `Illuminate\Database\QueryException` if any dependent row exists, instead of cascading and physically wiping subscriptions/licenses. To archive a plan, soft-delete it: `$plan->delete()`. `$plan->forceDelete()` only succeeds after every dependent row is migrated away. The `Plan` model uses `SoftDeletes`, and `Subscription::plan()` / `License::plan()` / `SubscriptionItem::plan()` chain `->withTrashed()` so historical billing keeps resolving archived plans.
+
+Before v1.3.0 these foreign keys were declared `ON DELETE CASCADE`. Model-level `softDeletes` on `subscriptions` and `licenses` did NOT protect — InnoDB / SQLite FK enforcement runs at the database layer, below Eloquent.
 
 ### Mock-Mode Fail-Closed
 

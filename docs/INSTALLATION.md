@@ -115,7 +115,27 @@ composer test-live
 
 Process environment values win. If live values are missing, the live gate may optionally use a user-managed fallback file through `.env.test` or `SUBGUARD_LIVE_ENV_FILE` without overwriting exported values. If required values are still missing, the live suite skips cleanly instead of silently falling back to mock traffic.
 
-## 8. Next Reading
+## 8. Upgrading From v1.2.x To v1.3.0
+
+v1.3.0 ships a required, idempotent fix migration `2026_05_13_090000_fix_cascade_delete_protection.php` that:
+
+- Adds `deleted_at` to `plans` (the `Plan` model now uses `SoftDeletes`).
+- Drops and re-creates four foreign keys as `RESTRICT`: `subscriptions.plan_id`, `licenses.plan_id`, `licenses.user_id`, `subscription_items.plan_id`.
+
+Apply it:
+
+```bash
+composer update
+php artisan migrate
+```
+
+**Behaviour change to plan for**: `User::delete()` no longer cascade-removes the user's licenses — the `RESTRICT` foreign key will throw `Illuminate\Database\QueryException` if any license still references the user. Audit your user-deletion flow and remove or archive dependent licenses first.
+
+**Plan management**: use `$plan->delete()` (soft) rather than raw `DB::table('plans')->delete(...)`. `$plan->forceDelete()` and direct SQL deletes now also throw when dependents exist — that's the protection you want.
+
+If you accidentally `DELETE FROM plans` on a v1.2.x install before applying this migration, every dependent subscription, license, and subscription item is physically wiped; soft-deletes do not protect you because FK actions execute below Eloquent.
+
+## 9. Next Reading
 
 After installation, continue with:
 
