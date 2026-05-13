@@ -21,6 +21,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Commands\ProcessDunningCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\ProcessMeteredBillingCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\ProcessPlanChangesCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\ProcessRenewalsCommand;
+use SubscriptionGuard\LaravelSubscriptionGuard\Commands\ProcessTrialExpiryCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\SimulateWebhookCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\SuspendOverdueCommand;
 use SubscriptionGuard\LaravelSubscriptionGuard\Commands\SyncLicenseHeartbeatsCommand;
@@ -68,6 +69,7 @@ class LaravelSubscriptionGuardServiceProvider extends PackageServiceProvider
             ->hasCommands([
                 LaravelSubscriptionGuardCommand::class,
                 ProcessRenewalsCommand::class,
+                ProcessTrialExpiryCommand::class,
                 ProcessDunningCommand::class,
                 SuspendOverdueCommand::class,
                 ProcessMeteredBillingCommand::class,

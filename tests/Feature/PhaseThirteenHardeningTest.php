@@ -3,10 +3,15 @@
 declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessTrialExpiryJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
+use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
 use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 use SubscriptionGuard\LaravelSubscriptionGuard\Support\Json;
 
@@ -193,4 +198,87 @@ it('Task 5 — create() with zero trial_days behaves like no-trial', function ()
 
     expect($result['status'])->toBe(SubscriptionStatus::Pending->value);
     expect($result['trial_ends_at'])->toBeNull();
+});
+
+// -----------------------------------------------------------------------------
+// Task 6: ProcessTrialExpiryJob + subguard:process-trial-expiry command
+// -----------------------------------------------------------------------------
+
+function makeTrialingSubscriptionHardening(string $email, string $provider, $trialEndsAt): Subscription
+{
+    $userId = makeUserHardening($email);
+    $plan = Plan::query()->create([
+        'name' => 'P',
+        'slug' => 'trial-'.bin2hex(random_bytes(3)),
+        'currency' => 'TRY',
+        'price' => 50,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'trial_days' => 15,
+        'provider' => $provider,
+    ]);
+
+    return Subscription::unguarded(fn (): Subscription => Subscription::query()->create([
+        'subscribable_type' => config('auth.providers.users.model'),
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->getKey(),
+        'provider' => $provider,
+        'status' => SubscriptionStatus::Trialing->value,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'amount' => 50,
+        'currency' => 'TRY',
+        'trial_ends_at' => $trialEndsAt,
+        'next_billing_date' => $trialEndsAt,
+        'metadata' => [],
+    ]));
+}
+
+it('Task 6 — ProcessTrialExpiryJob transitions trialing → past_due when self-managed trial expired', function (): void {
+    $sub = makeTrialingSubscriptionHardening('trial-exp-pastdue@example.test', 'paytr', now()->subMinute());
+
+    (new ProcessTrialExpiryJob((int) $sub->getKey()))->handle(
+        app(PaymentManager::class),
+        app(SubscriptionService::class),
+    );
+
+    $sub->refresh();
+    expect($sub->getAttribute('status'))->toBe(SubscriptionStatus::PastDue->value);
+});
+
+it('Task 6 — ProcessTrialExpiryJob leaves status unchanged when trial not yet expired', function (): void {
+    $sub = makeTrialingSubscriptionHardening('trial-future@example.test', 'paytr', now()->addDays(5));
+
+    (new ProcessTrialExpiryJob((int) $sub->getKey()))->handle(
+        app(PaymentManager::class),
+        app(SubscriptionService::class),
+    );
+
+    $sub->refresh();
+    expect($sub->getAttribute('status'))->toBe(SubscriptionStatus::Trialing->value);
+});
+
+it('Task 6 — ProcessTrialExpiryJob skips provider-managed subscriptions (iyzico drives transition via webhook)', function (): void {
+    $sub = makeTrialingSubscriptionHardening('trial-iyzico@example.test', 'iyzico', now()->subMinute());
+
+    (new ProcessTrialExpiryJob((int) $sub->getKey()))->handle(
+        app(PaymentManager::class),
+        app(SubscriptionService::class),
+    );
+
+    $sub->refresh();
+    expect($sub->getAttribute('status'))->toBe(SubscriptionStatus::Trialing->value);
+});
+
+it('Task 6 — subguard:process-trial-expiry dispatches a job per expired trialing subscription', function (): void {
+    Queue::fake();
+
+    makeTrialingSubscriptionHardening('cmd-trial-1@example.test', 'paytr', now()->subMinute());
+    makeTrialingSubscriptionHardening('cmd-trial-2@example.test', 'paytr', now()->subMinute());
+    makeTrialingSubscriptionHardening('cmd-trial-future@example.test', 'paytr', now()->addDays(5));
+
+    $exitCode = Artisan::call('subguard:process-trial-expiry');
+
+    expect($exitCode)->toBe(0);
+    Queue::assertPushed(ProcessTrialExpiryJob::class, 2);
 });
