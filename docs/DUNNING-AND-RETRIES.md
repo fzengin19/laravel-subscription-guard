@@ -2,6 +2,21 @@
 
 Use this document to understand how the package handles recurring payment failures, retry scheduling, grace periods, and automatic suspension.
 
+## Provider-Managed Isolation (v1.1.0+)
+
+For providers where `managesOwnBilling()` returns `true` (currently `iyzico`), the package enforces strict isolation from the local dunning pipeline:
+
+- `SubscriptionService::recordWebhookTransaction` does **not** set `next_retry_at` on the transaction.
+- `SubscriptionService::processDunning` skips provider-managed transactions when scanning candidates.
+- `ProcessDunningRetryJob` re-checks `managesOwnBilling()` defensively and neutralizes any legacy rows by clearing `next_retry_at` and marking the transaction `failed` without dispatching a charge.
+- `PaymentChargeJob::prepareChargePayload` performs the same defensive guard before reaching `chargeRecurring()`.
+
+This guarantees a provider-managed subscription's failure never enters the local retry loop, even if a legacy transaction row from before v1.1.0 still has `next_retry_at` populated.
+
+## Terminal State Guard (v1.1.0+)
+
+`SubscriptionService::applySubscriptionStatus()` wraps every status transition that previously called `setAttribute('status', ...)` or `transitionTo(...)` directly. Cancelled subscriptions cannot be reactivated by late webhooks, in-flight `PaymentChargeJob` callbacks, or `ProcessDunningRetryJob::handleDunningExhaustion`. Attempted writes log to `subguard_payments` and return `false` without mutating state.
+
 ## Scope
 
 Dunning applies only to **self-managed (package-managed) billing**. When `manages_own_billing` is `true` for a provider (e.g., Iyzico), the provider handles its own retry logic externally, and the package reflects the result via webhooks.

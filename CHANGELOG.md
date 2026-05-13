@@ -1,5 +1,69 @@
 # Changelog
 
+## v1.2.0 — 2026-05-13
+
+### Post-v1.1.0 hardening
+
+- **PHP constraint relaxed**: `composer.json` `"php"` is now `"^8.3 || ^8.4"`
+  (was `"^8.4"`). The codebase uses zero PHP 8.4-specific features; the previous
+  constraint artificially blocked PHP 8.3 deployments.
+- **Trial as first-class state**: new `SubscriptionStatus::Trialing` enum case
+  with transitions `Pending → Trialing` and `Trialing → {Active, PastDue,
+  Cancelled, Failed}`. Seven raw `'trialing'` strings in production code
+  (`SubscriptionService`, `PaytrProvider`, `PaymentChargeJob`,
+  `ProcessRenewalCandidateJob`, `LicenseManager`) replaced with the enum so
+  `Subscription::transitionTo()`'s state-machine guard actually fires.
+- **Trial orchestration**: new `plans.trial_days` column, trial-aware
+  `SubscriptionService::create()` (sets `status=trialing` and `trial_ends_at`
+  when `trial_days > 0`), new `ProcessTrialExpiryJob`, and new
+  `subguard:process-trial-expiry` Artisan command (uses `lazyById(500)`).
+  Self-managed providers transition `trialing → past_due` on trial end;
+  provider-managed (`iyzico`) defers to its own subscription event.
+- **Idempotency hash safety**: new `Support\Json::safeHash()` helper using
+  `JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE`, replacing
+  `hash('sha256', (string) json_encode(\$x))` at three webhook eventId
+  fallback sites (`IyzicoProvider::eventId`, `PaytrProvider::processWebhook`,
+  `IyzicoProviderEventDispatcher::dispatch`). Falls back to `serialize()`
+  on `JsonException`.
+- **Chunked cron queries**: `processRenewals`, `processDunning`,
+  `processScheduledPlanChanges`, and `retryPastDuePayments` now stream
+  via `lazyById(500)` — peak memory is bounded regardless of backlog size.
+- **Cancel TOCTOU defensive refresh**: `SubscriptionService::cancel()`
+  re-reads the subscription after the cache lock attempt (both on
+  contention-loss and after acquiring the lock) and returns `true`
+  idempotently if a concurrent worker has cancelled the subscription.
+- **PaymentCallbackController header filtering**: 3DS and checkout
+  callbacks now strip `authorization`, `cookie`, `set-cookie`, and
+  `proxy-authorization` headers before persisting to `webhook_calls`,
+  mirroring `WebhookController::filterHeaders()`.
+
+### Documentation
+
+- `INSTALLATION.md`: corrected the iyzico `IYZICO_CALLBACK_URL` example
+  (was the non-existent `/subguard/payment/iyzico/callback`; now the
+  correct base `/subguard/webhooks/iyzico` with a note that the package
+  appends `/3ds/callback` and `/checkout/callback`).
+- `DOMAIN-BILLING.md`, `DUNNING-AND-RETRIES.md`, `FAQ.md`, `SECURITY.md`,
+  `TROUBLESHOOTING.md`, `providers/IYZICO.md`: refreshed to reflect
+  v1.1.0 + v1.2.0 behaviour (mock-mode guard, terminal-state guard,
+  trial flow, provider-managed dunning isolation, cancel orchestration
+  order, hash-safety helper).
+
+### Tests
+
+- New `tests/Feature/PhaseThirteenHardeningTest.php` — 26 regression tests
+  across Tasks 1, 2, 3, 4, 5, 6, 7, 9, 12, B.
+- Full suite: 246 → 272 passed / 856 → 911 assertions.
+- PHPStan level 5 remains clean.
+
+### Deferred to v1.3.0 (evidence required before merging)
+
+- `DB::afterCommit` event dispatch refactor (13 sites in `SubscriptionService`)
+  — needs a listener audit to confirm none rely on pre-commit visibility.
+- Iyzico cancel idempotency (`subscription not found` / `already cancelled`
+  error code mapping) — needs verification against
+  `vendor/iyzico/iyzipay-php` or a live sandbox round-trip.
+
 ## v1.1.0 — 2026-04-22
 
 ### Production readiness blockers fixed (P0/P1 from 2026-04-21 review)

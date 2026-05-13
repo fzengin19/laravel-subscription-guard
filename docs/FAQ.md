@@ -2,6 +2,28 @@
 
 Common questions about Laravel Subscription Guard.
 
+## Production Readiness (v1.1.0 + v1.2.0)
+
+### Is mock mode safe in production?
+
+Yes — fail-closed. `ProviderMockModeGuard::ensureNotProduction()` throws `ProviderException` from `IyzicoSupport::mockMode()` and `PaytrProvider::mockMode()` when `app()->environment('production')` and the corresponding `*_MOCK` flag is true. The previous critical-log-only bypass at the webhook validation site was removed in v1.1.0.
+
+### What happens if the provider's cancel call fails?
+
+`SubscriptionService::cancel()` aborts and returns `false` **without** touching local state. The remote cancel runs **before** the local transition, under a `subguard:subscription-cancel:{id}` cache lock. Failures and thrown exceptions both log to the `subguard_payments` channel with `provider`, `subscription_id`, and `error` context.
+
+### Can a cancelled subscription be reactivated by a late webhook?
+
+No. `SubscriptionService::applySubscriptionStatus()` rejects any non-cancelled target on a subscription whose `status` is already `cancelled`, logs the attempt to `subguard_payments`, and returns `false`. This guard covers `recordWebhookTransaction`, `handlePaymentResult`, `PaymentChargeJob::handle`, and `ProcessDunningRetryJob::handleDunningExhaustion`.
+
+### Does the package start a trial automatically?
+
+Yes, if the plan has `trial_days > 0`. `SubscriptionService::create()` sets the initial status to `Trialing` and populates `trial_ends_at`. Trial expiry is handled by the `subguard:process-trial-expiry` Artisan command + `ProcessTrialExpiryJob`. See [Domain Billing — Trial Flow](DOMAIN-BILLING.md#trial-flow-v120).
+
+### What PHP version does the package require?
+
+PHP **8.3 or 8.4** (composer.json: `"php": "^8.3 || ^8.4"`). The codebase does not use any PHP 8.4-specific features.
+
 ## General
 
 ### What billing providers are supported?

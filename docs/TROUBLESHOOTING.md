@@ -2,6 +2,43 @@
 
 Use this document to diagnose common issues with the package.
 
+## Production Readiness Issues
+
+### `ProviderException: Provider mock mode is enabled for [iyzico] in production`
+
+The `IYZICO_MOCK` or `PAYTR_MOCK` env flag is `true` and `APP_ENV=production`. By design (v1.1.0 `ProviderMockModeGuard`), this fails closed instead of silently accepting fake traffic. Disable the mock flag and redeploy.
+
+### `Provider cancellation returned false; local subscription left untouched`
+
+`SubscriptionService::cancel()` invoked the provider's `cancelSubscription()` and the remote returned `false` (or threw). The local subscription is intentionally left unchanged — local state must not diverge from remote billing. Check:
+
+1. Provider credentials are set (`IYZICO_API_KEY` / `IYZICO_SECRET_KEY`).
+2. The provider's subscription reference (`provider_subscription_id`) is correct.
+3. Network reachability to the provider's API.
+4. Logs in the `subguard_payments` channel for the exception message.
+
+### `Ignored status change on cancelled subscription`
+
+`SubscriptionService::applySubscriptionStatus()` rejected a write because the target subscription is in the terminal `cancelled` state. The log entry includes `target`, `source`, and `subscription_id` to help trace where the late event came from (typically a delayed webhook).
+
+### Trial subscription stuck in `trialing` past `trial_ends_at`
+
+The `subguard:process-trial-expiry` Artisan command is not scheduled. Add it to your consuming app's scheduler:
+
+```php
+$schedule->command('subguard:process-trial-expiry')->everyFiveMinutes();
+```
+
+For provider-managed providers (`iyzico`), the trial transition is driven by the provider's subscription event via the webhook pipeline — verify webhooks are reaching `/subguard/webhooks/iyzico` and the corresponding `WebhookCall` row exists.
+
+### OOM during `processRenewals` / `processDunning`
+
+Should not happen with v1.2.0+ — all four cron-style queries (`processRenewals`, `processDunning`, `processScheduledPlanChanges`, `retryPastDuePayments`) now stream via `lazyById(500)`. If you are still on v1.1.0 or earlier, upgrade.
+
+### `PaymentCallbackController` 400 "Empty payload"
+
+Iyzico is POSTing the 3DS callback without parseable form/JSON body. Check the `Content-Type` header; the controller currently uses `$request->all()` which depends on it. (A future v1.3.0 may add raw-body fallback once we have evidence of a provider sending mixed content types.)
+
 ## Webhook Issues
 
 ### Webhooks return 403 or 422

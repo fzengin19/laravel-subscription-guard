@@ -4,6 +4,31 @@ Use this document when you are integrating the `iyzico` adapter specifically.
 
 It explains the current provider-specific behavior, callback and webhook expectations, command surface, and the boundary between deterministic local flows and real sandbox traffic.
 
+## Cancellation Orchestration (v1.1.0+)
+
+`SubscriptionService::cancel()` invokes the iyzico `cancelSubscription` remote call **before** mutating local state, under a `subguard:subscription-cancel:{id}` cache lock. The flow is:
+
+1. `find($subscriptionId)` and pre-lock idempotency check — if already `cancelled`, return `true`.
+2. Acquire `Cache::lock('subguard:subscription-cancel:'.{id}, 30)`. On contention, the loser refreshes and returns `true` if the winner has committed.
+3. After lock acquisition, refresh again (defensive). If now cancelled, return `true`.
+4. Call `$provider->cancelSubscription($providerSubscriptionId)`. If it throws or returns `false`, **abort without local changes** and return `false`.
+5. Open a DB transaction with `lockForUpdate`. Transition status to `Cancelled` (state-machine-validated), set `cancelled_at`, save.
+6. Dispatch `SubscriptionCancelled`, the iyzico-specific provider event, and `DispatchBillingNotificationsJob('subscription.cancelled', …)`.
+
+The package intentionally does not retry remote cancellation — a `false` result is surfaced to the caller, and operators can re-invoke `SubscriptionService::cancel()` once the underlying issue is resolved.
+
+> **Known v1.2.0 limitation:** the adapter does not yet distinguish "remote subscription not found / already cancelled" responses from outright failures. Operators may see a `false` return value even when iyzico considers the subscription cancelled. Mapping these error codes is scheduled for v1.3.0 (requires sandbox verification).
+
+## Webhook Signature Schemes
+
+`IyzicoProvider::validateWebhook()` accepts three HMAC-SHA256 variants, evaluated in order:
+
+1. **Subscription event scheme** — used when `subscriptionReferenceCode`, `orderReferenceCode`, `customerReferenceCode`, and the configured `merchant_id` are all present. Message: `merchantId + secret + eventType + subscriptionReferenceCode + orderReferenceCode + customerReferenceCode`.
+2. **Token-based scheme** — used when `token` is present. Message: `secret + eventType + paymentId + token + paymentConversationId + status`.
+3. **Payment-only scheme** — fallback when `eventType`, `paymentId`, `paymentConversationId`, and `status` are all non-empty. Message: `secret + eventType + paymentId + paymentConversationId + status`.
+
+In every case the message is HMAC-signed with the iyzico secret key, hex-encoded via `bin2hex(hash_hmac('sha256', $message, $secret, true))`, and compared with `hash_equals(strtolower($computed), strtolower($signature))`. Validation runs in `WebhookController` **before** the payload is persisted to `webhook_calls`.
+
 ## Role In The Package
 
 `iyzico` is the current provider-managed billing adapter.

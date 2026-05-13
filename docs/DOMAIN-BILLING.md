@@ -2,6 +2,31 @@
 
 Use this document to understand the package's billing model, renewal flow, retry behavior, metered usage handling, and seat-management rules.
 
+## Trial Flow (v1.2.0)
+
+A plan with `trial_days > 0` causes `SubscriptionService::create()` to:
+
+- set the subscription's `status` to `SubscriptionStatus::Trialing`
+- populate `trial_ends_at` with `now()->addDays($plan->trial_days)`
+- anchor `next_billing_date` to `trial_ends_at` so the first dunning sweep aligns with end-of-trial
+
+When the trial ends, the transition is driven by:
+
+- **Self-managed providers** (`paytr`): the `subguard:process-trial-expiry` Artisan command (run on cron) dispatches `ProcessTrialExpiryJob` per subscription. The job moves `Trialing → PastDue` and sets `grace_ends_at` so the standard dunning flow takes over.
+- **Provider-managed providers** (`iyzico`): the package intentionally does **not** transition the subscription itself. Iyzico's subscription event drives the state change via the webhook intake pipeline.
+
+Allowed trial state transitions are encoded in `SubscriptionStatus::allowedTransitions()`:
+
+```
+Pending → Trialing → {Active, PastDue, Cancelled, Failed}
+```
+
+Schedule the command in your consuming app's `routes/console.php` or `Console/Kernel.php`:
+
+```php
+$schedule->command('subguard:process-trial-expiry')->everyFiveMinutes();
+```
+
 ## Billing Scope
 
 In this package, billing covers:
@@ -13,6 +38,7 @@ In this package, billing covers:
 - discounts and coupons
 - metered usage collection
 - seat quantity management
+- trial start, trial expiry orchestration (self-managed providers)
 - invoice and notification hooks
 
 The canonical orchestration service for these behaviors is `SubscriptionService`, with follow-up work delegated to jobs.
