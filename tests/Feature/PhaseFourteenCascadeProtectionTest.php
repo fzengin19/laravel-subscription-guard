@@ -201,3 +201,29 @@ it('Task 7 — Subscription, License, SubscriptionItem resolve their soft-delete
     expect($item->fresh()->plan)->not->toBeNull()
         ->and($item->fresh()->plan->id)->toBe($plan->id);
 });
+
+// -----------------------------------------------------------------------------
+// Task 8: Subscription soft-delete still works (paranoia after FK swap)
+// -----------------------------------------------------------------------------
+
+it('Task 8 — Subscription softDelete unaffected by FK changes', function (): void {
+    $userId = makeUserCascade('task8@example.test');
+    $plan = makePlanCascade();
+
+    $subscription = Subscription::query()->forceCreate([
+        'subscribable_type' => config('auth.providers.users.model'),
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->id,
+        'provider' => 'iyzico',
+        'status' => 'active',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'amount' => 100,
+        'currency' => 'TRY',
+    ]);
+
+    $subscription->delete();
+
+    expect(Subscription::query()->find($subscription->id))->toBeNull();
+    expect(Subscription::withTrashed()->find($subscription->id))->not->toBeNull();
+});
