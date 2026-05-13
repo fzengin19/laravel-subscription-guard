@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
@@ -11,12 +12,11 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\SubscriptionServiceInte
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\PaymentResponse;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\PaymentCompleted;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\PaymentFailed;
-use SubscriptionGuard\LaravelSubscriptionGuard\Events\SubscriptionRenewed;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\SubscriptionRenewalFailed;
+use SubscriptionGuard\LaravelSubscriptionGuard\Events\SubscriptionRenewed;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\DispatchBillingNotificationsJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessDunningRetryJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessRenewalCandidateJob;
-use SubscriptionGuard\LaravelSubscriptionGuard\Models\License;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\ScheduledPlanChange;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
@@ -102,7 +102,7 @@ it('throws on invalid plan when creating a subscription', function (): void {
 
     $service = app(SubscriptionServiceInterface::class);
     $service->create($userId, 999999, 1);
-})->throws(\Illuminate\Database\Eloquent\ModelNotFoundException::class);
+})->throws(ModelNotFoundException::class);
 
 // --- cancel() ---
 

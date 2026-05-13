@@ -1,6 +1,7 @@
 <?php
 
 declare(strict_types=1);
+use Symfony\Component\Yaml\Yaml;
 
 it('pins deterministic suite discovery and runtime defaults in phpunit xml', function (): void {
     $xpath = phaseEightXmlXPath(phaseEightRepoRoot().'/phpunit.xml.dist');
@@ -64,7 +65,7 @@ it('keeps deterministic runtime defaults active in the normal suite', function (
 });
 
 it('keeps testbench yaml env entries flat for testbench bootstrap consumers', function (): void {
-    $yaml = \Symfony\Component\Yaml\Yaml::parseFile(phaseEightRepoRoot().'/testbench.yaml');
+    $yaml = Yaml::parseFile(phaseEightRepoRoot().'/testbench.yaml');
     $envEntries = $yaml['env'] ?? [];
 
     expect($envEntries)->not->toBeEmpty();
@@ -81,15 +82,15 @@ function phaseEightRepoRoot(): string
     return dirname(__DIR__, 2);
 }
 
-function phaseEightXmlXPath(string $path): \DOMXPath
+function phaseEightXmlXPath(string $path): DOMXPath
 {
-    $document = new \DOMDocument;
+    $document = new DOMDocument;
     $document->load($path);
 
-    return new \DOMXPath($document);
+    return new DOMXPath($document);
 }
 
-function phaseEightXmlNodeValues(\DOMXPath $xpath, string $expression): array
+function phaseEightXmlNodeValues(DOMXPath $xpath, string $expression): array
 {
     $values = [];
 
@@ -100,7 +101,7 @@ function phaseEightXmlNodeValues(\DOMXPath $xpath, string $expression): array
     return $values;
 }
 
-function phaseEightXmlServerMap(\DOMXPath $xpath): array
+function phaseEightXmlServerMap(DOMXPath $xpath): array
 {
     $servers = [];
 

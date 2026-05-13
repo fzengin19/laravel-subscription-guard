@@ -4,16 +4,21 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Events\TrialEnding;
+use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessRenewalCandidateJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessTrialExpiryJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
+use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider;
 use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 use SubscriptionGuard\LaravelSubscriptionGuard\Support\Json;
 
@@ -66,7 +71,7 @@ it('Task 1 — Json::safeHash distinguishes two distinct binary payloads', funct
 });
 
 it('Task 1 — Json::safeHash falls back to serialize() for resources or cycles', function (): void {
-    $a = new \stdClass;
+    $a = new stdClass;
     $a->self = $a; // recursion → json_encode throws
 
     $hash = Json::safeHash($a);
@@ -336,7 +341,7 @@ it('Task 6 — subguard:process-trial-expiry dispatches a job per expired triali
 // -----------------------------------------------------------------------------
 
 it('Task 7 — IyzicoProvider::processWebhook eventId is stable, non-empty for binary payload', function (): void {
-    $provider = app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider::class);
+    $provider = app(IyzicoProvider::class);
     $emptyHash = hash('sha256', '');
 
     $a = $provider->processWebhook(['data' => "\xC3\x28"]);
@@ -348,7 +353,7 @@ it('Task 7 — IyzicoProvider::processWebhook eventId is stable, non-empty for b
 });
 
 it('Task 7 — PaytrProvider::processWebhook eventId is stable, non-empty for binary payload (no merchant_oid/event_id)', function (): void {
-    $provider = app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider::class);
+    $provider = app(PaytrProvider::class);
     $emptyHash = hash('sha256', '');
 
     $a = $provider->processWebhook(['status' => 'failed', 'data' => "\xC3\x28"]);
@@ -436,7 +441,7 @@ it('Task 12 — cancel returns true when DB became cancelled between find and lo
     ]));
 
     // Simulate winner: hold the cache lock externally AND mark sub cancelled in DB.
-    $externalLock = \Illuminate\Support\Facades\Cache::lock('subguard:subscription-cancel:'.$sub->getKey(), 30);
+    $externalLock = Cache::lock('subguard:subscription-cancel:'.$sub->getKey(), 30);
     expect($externalLock->get())->toBeTrue();
 
     DB::table('subscriptions')->where('id', $sub->getKey())->update([
@@ -474,7 +479,7 @@ it('Task B — PaymentCallbackController strips authorization and cookie headers
 
     expect($response->status())->toBeIn([200, 202]);
 
-    $call = \SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall::query()
+    $call = WebhookCall::query()
         ->where('provider', 'iyzico')
         ->latest('id')
         ->first();
@@ -520,7 +525,7 @@ it('Task 9 — processRenewals still dispatches one job per candidate across man
 
     expect($count)->toBe(25);
     Queue::assertPushed(
-        \SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessRenewalCandidateJob::class,
+        ProcessRenewalCandidateJob::class,
         25
     );
 });

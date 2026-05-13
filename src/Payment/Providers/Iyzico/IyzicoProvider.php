@@ -37,6 +37,7 @@ use Throwable;
 final class IyzicoProvider implements PaymentProviderInterface
 {
     use SanitizesProviderData;
+
     public function __construct(
         private readonly IyzicoRequestBuilder $requestBuilder,
         private readonly IyzicoCardManager $cardManager,

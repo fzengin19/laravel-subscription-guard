@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Support\Facades\DB;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\LicenseManagerInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\ValidationResult;
 use SubscriptionGuard\LaravelSubscriptionGuard\Licensing\LicenseRevocationStore;
@@ -221,7 +222,7 @@ it('persists license record on generation when owner and plan exist', function (
     config()->set('subscription-guard.license.keys.public', $publicKey);
     config()->set('subscription-guard.license.keys.private', $privateKey);
 
-    $userId = (int) \Illuminate\Support\Facades\DB::table('users')->insertGetId([
+    $userId = (int) DB::table('users')->insertGetId([
         'name' => 'Phase4 License User',
         'email' => 'phase4-license-user@example.test',
         'password' => 'secret',
@@ -255,7 +256,7 @@ it('activates and deactivates license with domain and max activation enforcement
     config()->set('subscription-guard.license.keys.public', $publicKey);
     config()->set('subscription-guard.license.keys.private', $privateKey);
 
-    $userId = (int) \Illuminate\Support\Facades\DB::table('users')->insertGetId([
+    $userId = (int) DB::table('users')->insertGetId([
         'name' => 'Phase4 Activation User',
         'email' => 'phase4-activation-user@example.test',
         'password' => 'secret',
@@ -300,7 +301,7 @@ it('reconciles drifted current activations on deactivate', function (): void {
     config()->set('subscription-guard.license.keys.public', $publicKey);
     config()->set('subscription-guard.license.keys.private', $privateKey);
 
-    $userId = (int) \Illuminate\Support\Facades\DB::table('users')->insertGetId([
+    $userId = (int) DB::table('users')->insertGetId([
         'name' => 'Phase4 Drift User',
         'email' => 'phase4-drift-user@example.test',
         'password' => 'secret',

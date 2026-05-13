@@ -3,6 +3,7 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\FeatureGateInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\LicenseManagerInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Licensing\LicenseRevocationStore;
@@ -232,7 +233,7 @@ it('returns true for a feature present in the license payload features list', fu
     $signature = app(LicenseSignature::class);
     $store = app(LicenseRevocationStore::class);
 
-    $licenseId = (string) \Illuminate\Support\Str::uuid();
+    $licenseId = (string) Str::uuid();
     $issuedAt = time();
 
     $licenseKey = $signature->sign([
@@ -262,7 +263,7 @@ it('returns false for a feature not in the license payload features list', funct
     $signature = app(LicenseSignature::class);
     $store = app(LicenseRevocationStore::class);
 
-    $licenseId = (string) \Illuminate\Support\Str::uuid();
+    $licenseId = (string) Str::uuid();
     $issuedAt = time();
 
     $licenseKey = $signature->sign([
@@ -310,7 +311,7 @@ it('returns the correct limit value from the license payload', function (): void
     $signature = app(LicenseSignature::class);
     $store = app(LicenseRevocationStore::class);
 
-    $licenseId = (string) \Illuminate\Support\Str::uuid();
+    $licenseId = (string) Str::uuid();
     $issuedAt = time();
 
     $licenseKey = $signature->sign([
@@ -340,7 +341,7 @@ it('returns zero for an undefined limit', function (): void {
     $signature = app(LicenseSignature::class);
     $store = app(LicenseRevocationStore::class);
 
-    $licenseId = (string) \Illuminate\Support\Str::uuid();
+    $licenseId = (string) Str::uuid();
     $issuedAt = time();
 
     $licenseKey = $signature->sign([
