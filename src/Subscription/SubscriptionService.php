@@ -68,18 +68,25 @@ final class SubscriptionService implements SubscriptionServiceInterface
                 return $existing->toArray();
             }
 
+            $trialDays = (int) ($plan->getAttribute('trial_days') ?? 0);
+            $initialStatus = $trialDays > 0
+                ? SubscriptionStatus::Trialing->value
+                : SubscriptionStatus::Pending->value;
+            $trialEndsAt = $trialDays > 0 ? now()->addDays($trialDays) : null;
+
             $subscription = Subscription::unguarded(fn (): Subscription => Subscription::query()->create([
                 'subscribable_type' => $userModelClass,
                 'subscribable_id' => $subscribableId,
                 'plan_id' => $planId,
                 'provider' => $this->paymentManager->defaultProvider(),
-                'status' => SubscriptionStatus::Pending->value,
+                'status' => $initialStatus,
                 'billing_period' => (string) $plan->getAttribute('billing_period'),
                 'billing_interval' => (int) $plan->getAttribute('billing_interval'),
                 'billing_anchor_day' => (int) now()->day,
                 'amount' => (float) $plan->getAttribute('price'),
                 'currency' => (string) $plan->getAttribute('currency'),
-                'next_billing_date' => now(),
+                'trial_ends_at' => $trialEndsAt,
+                'next_billing_date' => $trialEndsAt ?? now(),
                 'metadata' => [
                     'payment_method_id' => $paymentMethodId,
                 ],

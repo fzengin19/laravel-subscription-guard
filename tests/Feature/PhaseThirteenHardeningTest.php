@@ -6,6 +6,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
+use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 use SubscriptionGuard\LaravelSubscriptionGuard\Support\Json;
 
 uses(RefreshDatabase::class);
@@ -128,4 +130,67 @@ it('Task 3 — no production source file (outside the enum) contains the raw str
 
 it('Task 4 — plans table has trial_days column', function (): void {
     expect(Schema::hasColumn('plans', 'trial_days'))->toBeTrue();
+});
+
+// -----------------------------------------------------------------------------
+// Task 5: trial-aware SubscriptionService::create()
+// -----------------------------------------------------------------------------
+
+it('Task 5 — create() sets status=trialing and trial_ends_at when plan.trial_days > 0', function (): void {
+    $userId = makeUserHardening('trial-create@example.test');
+    $plan = Plan::query()->create([
+        'name' => 'Trial Plan',
+        'slug' => 'trial-plan-'.bin2hex(random_bytes(2)),
+        'currency' => 'TRY',
+        'price' => 99,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'trial_days' => 15,
+        'provider' => 'paytr',
+    ]);
+
+    $service = app(SubscriptionService::class);
+    $result = $service->create($userId, $plan->getKey(), 1);
+
+    expect($result['status'])->toBe(SubscriptionStatus::Trialing->value);
+    expect($result['trial_ends_at'])->not->toBeNull();
+});
+
+it('Task 5 — create() sets status=pending and trial_ends_at=null when plan has no trial_days', function (): void {
+    $userId = makeUserHardening('no-trial-create@example.test');
+    $plan = Plan::query()->create([
+        'name' => 'Regular Plan',
+        'slug' => 'regular-plan-'.bin2hex(random_bytes(2)),
+        'currency' => 'TRY',
+        'price' => 99,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'provider' => 'paytr',
+    ]);
+
+    $service = app(SubscriptionService::class);
+    $result = $service->create($userId, $plan->getKey(), 1);
+
+    expect($result['status'])->toBe(SubscriptionStatus::Pending->value);
+    expect($result['trial_ends_at'])->toBeNull();
+});
+
+it('Task 5 — create() with zero trial_days behaves like no-trial', function (): void {
+    $userId = makeUserHardening('zero-trial@example.test');
+    $plan = Plan::query()->create([
+        'name' => 'Zero Trial',
+        'slug' => 'zero-trial-'.bin2hex(random_bytes(2)),
+        'currency' => 'TRY',
+        'price' => 99,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'trial_days' => 0,
+        'provider' => 'paytr',
+    ]);
+
+    $service = app(SubscriptionService::class);
+    $result = $service->create($userId, $plan->getKey(), 1);
+
+    expect($result['status'])->toBe(SubscriptionStatus::Pending->value);
+    expect($result['trial_ends_at'])->toBeNull();
 });
