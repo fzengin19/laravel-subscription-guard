@@ -310,3 +310,62 @@ it('Task 7 — PaytrProvider::processWebhook eventId is stable, non-empty for bi
     expect($b->eventId)->not->toBe($emptyHash);
     expect($a->eventId)->not->toBe($b->eventId);
 });
+
+// -----------------------------------------------------------------------------
+// Task 9: lazyById chunking for cron-style queries
+// -----------------------------------------------------------------------------
+
+it('Task 9 — SubscriptionService uses lazyById for all four cron-style queries', function (): void {
+    $content = (string) file_get_contents(__DIR__.'/../../src/Subscription/SubscriptionService.php');
+
+    // 4 cron methods (processRenewals, processDunning, processScheduledPlanChanges, retryPastDuePayments)
+    // each replaced their ->get() with ->lazyById(500).
+    expect(substr_count($content, '->lazyById(500)'))->toBeGreaterThanOrEqual(4);
+
+    // No Eloquent ->get() should remain in cron methods. We assert by checking that
+    // no line containing "Subscription::query()", "Transaction::query()", or
+    // "ScheduledPlanChange::query()" is followed within the same chain by ->get().
+    // Simpler: assert ->get() does not appear in cron methods' bodies by looking for
+    // ->whereIn or ->where chains that end with get().
+    $cronMethodGets = preg_match_all('/Subscription::query\(\)[^;]*->get\(\)|Transaction::query\(\)[^;]*->get\(\)|ScheduledPlanChange::query\(\)[^;]*->get\(\)/s', $content);
+    expect($cronMethodGets)->toBe(0);
+});
+
+it('Task 9 — processRenewals still dispatches one job per candidate across many subscriptions', function (): void {
+    Queue::fake();
+
+    $plan = Plan::query()->create([
+        'name' => 'BulkPlan',
+        'slug' => 'bulk-plan-'.bin2hex(random_bytes(2)),
+        'currency' => 'TRY',
+        'price' => 50,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'provider' => 'paytr',
+    ]);
+
+    for ($i = 0; $i < 25; $i++) {
+        $userId = makeUserHardening("bulk-{$i}@example.test");
+        Subscription::unguarded(fn () => Subscription::query()->create([
+            'subscribable_type' => config('auth.providers.users.model'),
+            'subscribable_id' => $userId,
+            'plan_id' => $plan->getKey(),
+            'provider' => 'paytr',
+            'status' => SubscriptionStatus::Active->value,
+            'billing_period' => 'month',
+            'billing_interval' => 1,
+            'amount' => 50,
+            'currency' => 'TRY',
+            'next_billing_date' => now()->subMinute(),
+            'metadata' => [],
+        ]));
+    }
+
+    $count = app(SubscriptionService::class)->processRenewals(now());
+
+    expect($count)->toBe(25);
+    Queue::assertPushed(
+        \SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessRenewalCandidateJob::class,
+        25
+    );
+});

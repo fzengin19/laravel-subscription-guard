@@ -296,21 +296,20 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $count = 0;
         $formattedDate = Carbon::instance($date)->setTimezone($this->billingTimezone());
 
-        $subscriptions = Subscription::query()
+        Subscription::query()
             ->where('next_billing_date', '<=', $formattedDate)
             ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value])
-            ->get();
+            ->lazyById(500)
+            ->each(function (Subscription $subscription) use (&$count): void {
+                if ($this->paymentManager->managesOwnBilling((string) $subscription->getAttribute('provider'))) {
+                    return;
+                }
 
-        foreach ($subscriptions as $subscription) {
-            if ($this->paymentManager->managesOwnBilling((string) $subscription->getAttribute('provider'))) {
-                continue;
-            }
+                ProcessRenewalCandidateJob::dispatch((int) $subscription->getKey())
+                    ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
 
-            ProcessRenewalCandidateJob::dispatch((int) $subscription->getKey())
-                ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
-
-            $count++;
-        }
+                $count++;
+            });
 
         return $count;
     }
@@ -320,24 +319,23 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $count = 0;
         $formattedDate = Carbon::instance($date)->setTimezone($this->billingTimezone());
 
-        $transactions = Transaction::query()
+        Transaction::query()
             ->whereIn('status', ['failed', 'retrying'])
             ->whereNotNull('next_retry_at')
             ->where('next_retry_at', '<=', $formattedDate)
-            ->get();
+            ->lazyById(500)
+            ->each(function (Transaction $transaction) use (&$count): void {
+                $provider = (string) $transaction->getAttribute('provider');
 
-        foreach ($transactions as $transaction) {
-            $provider = (string) $transaction->getAttribute('provider');
+                if ($provider !== '' && $this->paymentManager->managesOwnBilling($provider)) {
+                    return;
+                }
 
-            if ($provider !== '' && $this->paymentManager->managesOwnBilling($provider)) {
-                continue;
-            }
+                ProcessDunningRetryJob::dispatch((int) $transaction->getKey())
+                    ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
 
-            ProcessDunningRetryJob::dispatch((int) $transaction->getKey())
-                ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
-
-            $count++;
-        }
+                $count++;
+            });
 
         return $count;
     }
@@ -347,17 +345,16 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $count = 0;
         $formattedDate = Carbon::instance($date)->setTimezone($this->billingTimezone());
 
-        $changes = ScheduledPlanChange::query()
+        ScheduledPlanChange::query()
             ->where('status', SubscriptionStatus::Pending->value)
             ->where('scheduled_at', '<=', $formattedDate)
-            ->get();
+            ->lazyById(500)
+            ->each(function (ScheduledPlanChange $change) use (&$count): void {
+                ProcessScheduledPlanChangeJob::dispatch((int) $change->getKey())
+                    ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
 
-        foreach ($changes as $change) {
-            ProcessScheduledPlanChangeJob::dispatch((int) $change->getKey())
-                ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
-
-            $count++;
-        }
+                $count++;
+            });
 
         return $count;
     }
@@ -366,21 +363,20 @@ final class SubscriptionService implements SubscriptionServiceInterface
     {
         $count = 0;
 
-        $subscriptions = Subscription::query()
+        Subscription::query()
             ->where('subscribable_id', $subscribableId)
             ->where('status', SubscriptionStatus::PastDue->value)
-            ->get();
+            ->lazyById(500)
+            ->each(function (Subscription $subscription) use (&$count): void {
+                if ($this->paymentManager->managesOwnBilling((string) $subscription->getAttribute('provider'))) {
+                    return;
+                }
 
-        foreach ($subscriptions as $subscription) {
-            if ($this->paymentManager->managesOwnBilling((string) $subscription->getAttribute('provider'))) {
-                continue;
-            }
+                ProcessRenewalCandidateJob::dispatch((int) $subscription->getKey())
+                    ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
 
-            ProcessRenewalCandidateJob::dispatch((int) $subscription->getKey())
-                ->onQueue($this->paymentManager->queueName('queue', 'subguard-main'));
-
-            $count++;
-        }
+                $count++;
+            });
 
         return $count;
     }
