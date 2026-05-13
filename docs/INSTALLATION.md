@@ -102,8 +102,10 @@ export IYZICO_MOCK=false
 export IYZICO_API_KEY=...
 export IYZICO_SECRET_KEY=...
 export IYZICO_BASE_URL=https://sandbox-api.iyzipay.com
-export IYZICO_CALLBACK_URL=https://<public-url>/subguard/payment/iyzico/callback
+export IYZICO_CALLBACK_URL=https://<public-url>/subguard/webhooks/iyzico
 ```
+
+> **Note:** This is the **base URL** that the package appends `/3ds/callback` or `/checkout/callback` to (see `routes/webhooks.php` and `IyzicoProvider::callbackUrl()`). The full iyzico-facing endpoints become `https://<public-url>/subguard/webhooks/iyzico/3ds/callback` and `https://<public-url>/subguard/webhooks/iyzico/checkout/callback`.
 
 Then run:
 
