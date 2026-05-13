@@ -111,10 +111,26 @@ final class SubscriptionService implements SubscriptionServiceInterface
         $lock = Cache::lock('subguard:subscription-cancel:'.$subscription->getKey(), 30);
 
         if (! $lock->get()) {
+            // Lock held by another worker. Re-read DB in case they committed cancellation
+            // between our find() above and this lock attempt — return idempotent true if so.
+            $subscription->refresh();
+
+            if ((string) $subscription->getAttribute('status') === SubscriptionStatus::Cancelled->value) {
+                return true;
+            }
+
             return false;
         }
 
         try {
+            // Defensive re-read inside the lock: another worker could have committed
+            // cancellation between our pre-lock find() and this point.
+            $subscription->refresh();
+
+            if ((string) $subscription->getAttribute('status') === SubscriptionStatus::Cancelled->value) {
+                return true;
+            }
+
             $provider = (string) $subscription->getAttribute('provider');
             $providerSubscriptionId = (string) ($subscription->getAttribute('provider_subscription_id') ?? '');
             $providerManaged = $provider !== '' && $this->paymentManager->managesOwnBilling($provider);

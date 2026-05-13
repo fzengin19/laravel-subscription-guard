@@ -331,6 +331,77 @@ it('Task 9 — SubscriptionService uses lazyById for all four cron-style queries
     expect($cronMethodGets)->toBe(0);
 });
 
+// -----------------------------------------------------------------------------
+// Task 12: cancel TOCTOU — re-check status inside the lock
+// -----------------------------------------------------------------------------
+
+it('Task 12 — cancel returns true for an already-cancelled subscription (pre-lock idempotency)', function (): void {
+    $userId = makeUserHardening('cancel-already@example.test');
+    $plan = Plan::query()->create([
+        'name' => 'P',
+        'slug' => 'cancel-already-'.bin2hex(random_bytes(2)),
+        'currency' => 'TRY',
+        'price' => 50,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'provider' => 'paytr',
+    ]);
+    $sub = Subscription::unguarded(fn () => Subscription::query()->create([
+        'subscribable_type' => config('auth.providers.users.model'),
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->getKey(),
+        'provider' => 'paytr',
+        'status' => SubscriptionStatus::Cancelled->value,
+        'cancelled_at' => now(),
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'amount' => 50,
+        'currency' => 'TRY',
+        'metadata' => [],
+    ]));
+
+    expect(app(SubscriptionService::class)->cancel($sub->getKey()))->toBeTrue();
+});
+
+it('Task 12 — cancel returns true when DB became cancelled between find and lock-attempt', function (): void {
+    $userId = makeUserHardening('cancel-toctou@example.test');
+    $plan = Plan::query()->create([
+        'name' => 'P',
+        'slug' => 'cancel-toctou-'.bin2hex(random_bytes(2)),
+        'currency' => 'TRY',
+        'price' => 50,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'provider' => 'paytr',
+    ]);
+    $sub = Subscription::unguarded(fn () => Subscription::query()->create([
+        'subscribable_type' => config('auth.providers.users.model'),
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->getKey(),
+        'provider' => 'paytr',
+        'status' => SubscriptionStatus::Active->value,
+        'billing_period' => 'month',
+        'billing_interval' => 1,
+        'amount' => 50,
+        'currency' => 'TRY',
+        'metadata' => [],
+    ]));
+
+    // Simulate winner: hold the cache lock externally AND mark sub cancelled in DB.
+    $externalLock = \Illuminate\Support\Facades\Cache::lock('subguard:subscription-cancel:'.$sub->getKey(), 30);
+    expect($externalLock->get())->toBeTrue();
+
+    DB::table('subscriptions')->where('id', $sub->getKey())->update([
+        'status' => SubscriptionStatus::Cancelled->value,
+        'cancelled_at' => now(),
+    ]);
+
+    // Loser arrives: find() will read fresh-cancelled, line 100-102 short-circuit fires → true.
+    expect(app(SubscriptionService::class)->cancel($sub->getKey()))->toBeTrue();
+
+    $externalLock->release();
+});
+
 it('Task 9 — processRenewals still dispatches one job per candidate across many subscriptions', function (): void {
     Queue::fake();
 
