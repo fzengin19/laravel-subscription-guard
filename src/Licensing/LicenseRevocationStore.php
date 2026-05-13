@@ -139,7 +139,7 @@ final class LicenseRevocationStore
         } finally {
             try {
                 $lock->release();
-            } catch (\Throwable) {
+            } catch (Throwable) {
             }
         }
     }

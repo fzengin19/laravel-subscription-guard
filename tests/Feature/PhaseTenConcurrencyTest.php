@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Queue;
@@ -14,10 +15,13 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider;
+use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
 beforeEach(function (): void {
     config()->set('subscription-guard.providers.drivers.dummy', [
-        'class' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider::class,
+        'class' => IyzicoProvider::class,
         'mock' => true,
         'manages_own_billing' => false,
         'webhook_response_format' => 'json',
@@ -108,7 +112,7 @@ it('prevents duplicate WebhookCall records via unique constraint on provider and
             'headers' => [],
             'status' => 'pending',
         ]);
-    } catch (\Illuminate\Database\QueryException $e) {
+    } catch (QueryException $e) {
         $thrown = true;
     }
 
@@ -145,7 +149,7 @@ it('skips renewal processing when the cache lock is already held', function (): 
 
     try {
         $job = new ProcessRenewalCandidateJob($subscription->getKey());
-        $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
+        $job->handle(app(PaymentManager::class), app(SubscriptionService::class));
     } finally {
         $lock->release();
     }
@@ -238,7 +242,7 @@ it('skips dunning retry processing when the cache lock is already held', functio
 
     try {
         $job = new ProcessDunningRetryJob($transaction->getKey());
-        $job->handle(app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class), app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class));
+        $job->handle(app(PaymentManager::class), app(SubscriptionService::class));
     } finally {
         $lock->release();
     }

@@ -1,12 +1,17 @@
 <?php
 
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProviderEventDispatcher;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProviderEventDispatcher;
+
 return [
     'providers' => [
         'default' => env('SUBGUARD_PROVIDER', 'iyzico'),
         'drivers' => [
             'iyzico' => [
-                'class' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider::class,
-                'event_dispatcher' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProviderEventDispatcher::class,
+                'class' => IyzicoProvider::class,
+                'event_dispatcher' => IyzicoProviderEventDispatcher::class,
                 'manages_own_billing' => true,
                 'api_key' => env('IYZICO_API_KEY'),
                 'secret_key' => env('IYZICO_SECRET_KEY'),
@@ -17,8 +22,8 @@ return [
                 'mock' => env('IYZICO_MOCK', false),
             ],
             'paytr' => [
-                'class' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider::class,
-                'event_dispatcher' => \SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProviderEventDispatcher::class,
+                'class' => PaytrProvider::class,
+                'event_dispatcher' => PaytrProviderEventDispatcher::class,
                 'manages_own_billing' => false,
                 'merchant_id' => env('PAYTR_MERCHANT_ID'),
                 'merchant_key' => env('PAYTR_MERCHANT_KEY'),

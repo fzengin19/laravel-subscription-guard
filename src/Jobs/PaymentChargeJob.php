@@ -230,7 +230,7 @@ final class PaymentChargeJob implements ShouldQueue
         });
     }
 
-    private function nextRetryDate(int $retryCount): ?\Illuminate\Support\Carbon
+    private function nextRetryDate(int $retryCount): ?Carbon
     {
         $retryDays = [2, 5, 7];
 

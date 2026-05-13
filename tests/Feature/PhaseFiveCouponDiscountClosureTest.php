@@ -3,11 +3,13 @@
 declare(strict_types=1);
 
 use Illuminate\Support\Facades\DB;
+use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessRenewalCandidateJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Coupon;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Discount;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
+use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
 use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
 
 it('rejects coupon when min purchase amount is not met', function (): void {
@@ -173,10 +175,10 @@ it('applies active discount to renewal transaction and links coupon/discount ids
 
     expect($result->applied)->toBeTrue();
 
-    (new \SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessRenewalCandidateJob((int) $subscription->getKey()))
+    (new ProcessRenewalCandidateJob((int) $subscription->getKey()))
         ->handle(
-            app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager::class),
-            app(\SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService::class)
+            app(PaymentManager::class),
+            app(SubscriptionService::class)
         );
 
     $transaction = Transaction::query()

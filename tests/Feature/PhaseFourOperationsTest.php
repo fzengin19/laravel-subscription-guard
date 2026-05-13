@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use Illuminate\Contracts\Console\Kernel;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -19,7 +20,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider;
 
 it('registers phase four operational commands', function (): void {
-    $commands = app(Illuminate\Contracts\Console\Kernel::class)->all();
+    $commands = app(Kernel::class)->all();
 
     expect($commands)->toHaveKeys([
         'subguard:generate-license',

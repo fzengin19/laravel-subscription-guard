@@ -2,10 +2,12 @@
 
 declare(strict_types=1);
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Coupon;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Discount;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Invoice;
+use SubscriptionGuard\LaravelSubscriptionGuard\Models\License;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\LicenseUsage;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\ScheduledPlanChange;
@@ -13,7 +15,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\SubscriptionItem;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 
-uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
+uses(RefreshDatabase::class);
 
 // ---------------------------------------------------------------------------
 // Helper: create the minimal user + plan + license + subscription graph
@@ -22,21 +24,21 @@ uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 function makeUserAndPlan(): array
 {
     $userId = (int) DB::table('users')->insertGetId([
-        'name'       => 'Cast Test User',
-        'email'      => 'cast-test-'.uniqid().'@example.test',
-        'password'   => 'secret',
+        'name' => 'Cast Test User',
+        'email' => 'cast-test-'.uniqid().'@example.test',
+        'password' => 'secret',
         'created_at' => now(),
         'updated_at' => now(),
     ]);
 
     $plan = Plan::query()->create([
-        'name'             => 'Cast Test Plan',
-        'slug'             => 'cast-test-plan-'.uniqid(),
-        'price'            => '49.99',
-        'currency'         => 'TRY',
-        'billing_period'   => 'monthly',
+        'name' => 'Cast Test Plan',
+        'slug' => 'cast-test-plan-'.uniqid(),
+        'price' => '49.99',
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
         'billing_interval' => 1,
-        'is_active'        => true,
+        'is_active' => true,
     ]);
 
     return [$userId, $plan];
@@ -49,34 +51,34 @@ function makeUserAndPlan(): array
 it('casts Transaction decimal fields to float', function (): void {
     [$userId, $plan] = makeUserAndPlan();
 
-    $license = \SubscriptionGuard\LaravelSubscriptionGuard\Models\License::unguarded(
-        static fn () => \SubscriptionGuard\LaravelSubscriptionGuard\Models\License::query()->create([
-            'user_id'    => $userId,
-            'plan_id'    => $plan->getKey(),
-            'key'        => 'SG.cast.tx.'.bin2hex(random_bytes(6)),
-            'status'     => 'active',
+    $license = License::unguarded(
+        static fn () => License::query()->create([
+            'user_id' => $userId,
+            'plan_id' => $plan->getKey(),
+            'key' => 'SG.cast.tx.'.bin2hex(random_bytes(6)),
+            'status' => 'active',
             'expires_at' => now()->addMonth(),
         ])
     );
 
     $transaction = Transaction::unguarded(
         static fn () => Transaction::query()->create([
-            'subscription_id'      => null,
-            'payable_type'         => 'App\\Models\\User',
-            'payable_id'           => $userId,
-            'license_id'           => $license->getKey(),
-            'provider'             => 'test',
-            'idempotency_key'      => 'cast-tx-'.bin2hex(random_bytes(8)),
-            'type'                 => 'payment',
-            'status'               => 'pending',
-            'amount'               => '99.99',
-            'tax_amount'           => '18.00',
-            'tax_rate'             => '18.00',
-            'discount_amount'      => '5.50',
-            'refunded_amount'      => '0.00',
-            'fee'                  => '2.25',
-            'exchange_rate'        => '1.250000',
-            'currency'             => 'TRY',
+            'subscription_id' => null,
+            'payable_type' => 'App\\Models\\User',
+            'payable_id' => $userId,
+            'license_id' => $license->getKey(),
+            'provider' => 'test',
+            'idempotency_key' => 'cast-tx-'.bin2hex(random_bytes(8)),
+            'type' => 'payment',
+            'status' => 'pending',
+            'amount' => '99.99',
+            'tax_amount' => '18.00',
+            'tax_rate' => '18.00',
+            'discount_amount' => '5.50',
+            'refunded_amount' => '0.00',
+            'fee' => '2.25',
+            'exchange_rate' => '1.250000',
+            'currency' => 'TRY',
         ])
     );
 
@@ -100,17 +102,17 @@ it('casts Subscription decimal fields to float', function (): void {
 
     $subscription = Subscription::unguarded(
         static fn () => Subscription::query()->create([
-            'subscribable_type'  => 'App\\Models\\User',
-            'subscribable_id'    => $userId,
-            'plan_id'            => $plan->getKey(),
-            'provider'           => 'test',
-            'status'             => 'pending',
-            'billing_period'     => 'monthly',
-            'billing_interval'   => 1,
-            'amount'             => '149.99',
-            'tax_amount'         => '26.99',
-            'tax_rate'           => '18.00',
-            'currency'           => 'TRY',
+            'subscribable_type' => 'App\\Models\\User',
+            'subscribable_id' => $userId,
+            'plan_id' => $plan->getKey(),
+            'provider' => 'test',
+            'status' => 'pending',
+            'billing_period' => 'monthly',
+            'billing_interval' => 1,
+            'amount' => '149.99',
+            'tax_amount' => '26.99',
+            'tax_rate' => '18.00',
+            'currency' => 'TRY',
         ])
     );
 
@@ -127,13 +129,13 @@ it('casts Subscription decimal fields to float', function (): void {
 
 it('casts Plan price to float', function (): void {
     $plan = Plan::query()->create([
-        'name'             => 'Float Plan '.uniqid(),
-        'slug'             => 'float-plan-'.uniqid(),
-        'price'            => '99.99',
-        'currency'         => 'TRY',
-        'billing_period'   => 'monthly',
+        'name' => 'Float Plan '.uniqid(),
+        'slug' => 'float-plan-'.uniqid(),
+        'price' => '99.99',
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
         'billing_interval' => 1,
-        'is_active'        => true,
+        'is_active' => true,
     ]);
 
     $fresh = $plan->fresh();
@@ -150,14 +152,14 @@ it('casts Invoice decimal fields to float', function (): void {
 
     $invoice = Invoice::unguarded(
         static fn () => Invoice::query()->create([
-            'invoice_number'   => 'INV-CAST-'.uniqid(),
+            'invoice_number' => 'INV-CAST-'.uniqid(),
             'subscribable_type' => 'App\\Models\\User',
-            'subscribable_id'  => $userId,
-            'status'           => 'draft',
-            'subtotal'         => '79.99',
-            'tax_amount'       => '14.40',
-            'total_amount'     => '94.39',
-            'currency'         => 'TRY',
+            'subscribable_id' => $userId,
+            'status' => 'draft',
+            'subtotal' => '79.99',
+            'tax_amount' => '14.40',
+            'total_amount' => '94.39',
+            'currency' => 'TRY',
         ])
     );
 
@@ -174,13 +176,13 @@ it('casts Invoice decimal fields to float', function (): void {
 
 it('casts Coupon decimal fields to float', function (): void {
     $coupon = Coupon::query()->create([
-        'code'               => 'CAST'.strtoupper(bin2hex(random_bytes(4))),
-        'name'               => 'Cast Coupon',
-        'type'               => 'percentage',
-        'value'              => '15.00',
+        'code' => 'CAST'.strtoupper(bin2hex(random_bytes(4))),
+        'name' => 'Cast Coupon',
+        'type' => 'percentage',
+        'value' => '15.00',
         'min_purchase_amount' => '50.00',
         'max_discount_amount' => '100.00',
-        'is_active'          => true,
+        'is_active' => true,
     ]);
 
     $fresh = $coupon->fresh();
@@ -196,10 +198,10 @@ it('casts Coupon decimal fields to float', function (): void {
 
 it('casts Discount decimal fields to float', function (): void {
     $coupon = Coupon::query()->create([
-        'code'      => 'DCAST'.strtoupper(bin2hex(random_bytes(4))),
-        'name'      => 'Discount Cast Coupon',
-        'type'      => 'percentage',
-        'value'     => '10.00',
+        'code' => 'DCAST'.strtoupper(bin2hex(random_bytes(4))),
+        'name' => 'Discount Cast Coupon',
+        'type' => 'percentage',
+        'value' => '10.00',
         'is_active' => true,
     ]);
 
@@ -207,15 +209,15 @@ it('casts Discount decimal fields to float', function (): void {
 
     $discount = Discount::unguarded(
         static fn () => Discount::query()->create([
-            'coupon_id'        => $coupon->getKey(),
+            'coupon_id' => $coupon->getKey(),
             'discountable_type' => 'App\\Models\\User',
-            'discountable_id'  => $userId,
-            'type'             => 'percentage',
-            'value'            => '10.00',
-            'currency'         => 'TRY',
-            'duration'         => 'once',
-            'applied_cycles'   => 1,
-            'applied_amount'   => '9.99',
+            'discountable_id' => $userId,
+            'type' => 'percentage',
+            'value' => '10.00',
+            'currency' => 'TRY',
+            'duration' => 'once',
+            'applied_cycles' => 1,
+            'applied_amount' => '9.99',
         ])
     );
 
@@ -235,23 +237,23 @@ it('casts SubscriptionItem unit_price to float and quantity to integer', functio
     $subscription = Subscription::unguarded(
         static fn () => Subscription::query()->create([
             'subscribable_type' => 'App\\Models\\User',
-            'subscribable_id'   => $userId,
-            'plan_id'           => $plan->getKey(),
-            'provider'          => 'test',
-            'status'            => 'pending',
-            'billing_period'    => 'monthly',
-            'billing_interval'  => 1,
-            'amount'            => 0,
-            'currency'          => 'TRY',
+            'subscribable_id' => $userId,
+            'plan_id' => $plan->getKey(),
+            'provider' => 'test',
+            'status' => 'pending',
+            'billing_period' => 'monthly',
+            'billing_interval' => 1,
+            'amount' => 0,
+            'currency' => 'TRY',
         ])
     );
 
     $item = SubscriptionItem::unguarded(
         static fn () => SubscriptionItem::query()->create([
             'subscription_id' => $subscription->getKey(),
-            'plan_id'         => $plan->getKey(),
-            'quantity'        => '3',
-            'unit_price'      => '29.99',
+            'plan_id' => $plan->getKey(),
+            'quantity' => '3',
+            'unit_price' => '29.99',
         ])
     );
 
@@ -268,23 +270,23 @@ it('casts SubscriptionItem unit_price to float and quantity to integer', functio
 it('casts LicenseUsage quantity to float', function (): void {
     [$userId, $plan] = makeUserAndPlan();
 
-    $license = \SubscriptionGuard\LaravelSubscriptionGuard\Models\License::unguarded(
-        static fn () => \SubscriptionGuard\LaravelSubscriptionGuard\Models\License::query()->create([
-            'user_id'    => $userId,
-            'plan_id'    => $plan->getKey(),
-            'key'        => 'SG.cast.lu.'.bin2hex(random_bytes(6)),
-            'status'     => 'active',
+    $license = License::unguarded(
+        static fn () => License::query()->create([
+            'user_id' => $userId,
+            'plan_id' => $plan->getKey(),
+            'key' => 'SG.cast.lu.'.bin2hex(random_bytes(6)),
+            'status' => 'active',
             'expires_at' => now()->addMonth(),
         ])
     );
 
     $usage = LicenseUsage::unguarded(
         static fn () => LicenseUsage::query()->create([
-            'license_id'   => $license->getKey(),
-            'metric'       => 'api_calls',
-            'quantity'     => '5.75',
+            'license_id' => $license->getKey(),
+            'metric' => 'api_calls',
+            'quantity' => '5.75',
             'period_start' => now()->subDay(),
-            'period_end'   => now()->addDay(),
+            'period_end' => now()->addDay(),
         ])
     );
 
@@ -301,39 +303,39 @@ it('casts ScheduledPlanChange proration_credit to float', function (): void {
     [$userId, $fromPlan] = makeUserAndPlan();
 
     $toPlan = Plan::query()->create([
-        'name'             => 'To Plan '.uniqid(),
-        'slug'             => 'to-plan-'.uniqid(),
-        'price'            => '199.99',
-        'currency'         => 'TRY',
-        'billing_period'   => 'monthly',
+        'name' => 'To Plan '.uniqid(),
+        'slug' => 'to-plan-'.uniqid(),
+        'price' => '199.99',
+        'currency' => 'TRY',
+        'billing_period' => 'monthly',
         'billing_interval' => 1,
-        'is_active'        => true,
+        'is_active' => true,
     ]);
 
     $subscription = Subscription::unguarded(
         static fn () => Subscription::query()->create([
             'subscribable_type' => 'App\\Models\\User',
-            'subscribable_id'   => $userId,
-            'plan_id'           => $fromPlan->getKey(),
-            'provider'          => 'test',
-            'status'            => 'active',
-            'billing_period'    => 'monthly',
-            'billing_interval'  => 1,
-            'amount'            => 0,
-            'currency'          => 'TRY',
+            'subscribable_id' => $userId,
+            'plan_id' => $fromPlan->getKey(),
+            'provider' => 'test',
+            'status' => 'active',
+            'billing_period' => 'monthly',
+            'billing_interval' => 1,
+            'amount' => 0,
+            'currency' => 'TRY',
         ])
     );
 
     $change = ScheduledPlanChange::unguarded(
         static fn () => ScheduledPlanChange::query()->create([
-            'subscription_id'  => $subscription->getKey(),
-            'from_plan_id'     => $fromPlan->getKey(),
-            'to_plan_id'       => $toPlan->getKey(),
-            'change_type'      => 'switch',
-            'scheduled_at'     => now()->addDay(),
-            'proration_type'   => 'credit',
+            'subscription_id' => $subscription->getKey(),
+            'from_plan_id' => $fromPlan->getKey(),
+            'to_plan_id' => $toPlan->getKey(),
+            'change_type' => 'switch',
+            'scheduled_at' => now()->addDay(),
+            'proration_type' => 'credit',
             'proration_credit' => '12.50',
-            'status'           => 'pending',
+            'status' => 'pending',
         ])
     );
 

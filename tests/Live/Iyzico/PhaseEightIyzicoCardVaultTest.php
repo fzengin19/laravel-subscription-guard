@@ -62,7 +62,6 @@ it('lists and deletes stored cards after tokenization', function (): void {
         $storedCards = $provider->listStoredCards($customerToken);
         $deleted = $provider->deleteStoredCard($customerToken, $cardToken);
 
-
         expect($response->success)->toBeTrue()
             ->and($customerToken)->not->toBe('')
             ->and($cardToken)->not->toBe('')

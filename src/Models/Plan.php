@@ -6,9 +6,12 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Plan extends Model
 {
+    use SoftDeletes;
+
     protected $guarded = ['id', 'is_active'];
 
     protected function casts(): array
@@ -18,6 +21,7 @@ class Plan extends Model
             'limits' => 'array',
             'is_active' => 'bool',
             'price' => 'float',
+            'deleted_at' => 'datetime',
         ];
     }
 

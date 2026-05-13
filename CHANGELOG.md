@@ -1,5 +1,53 @@
 # Changelog
 
+## v1.3.0 — 2026-05-13
+
+### Fixed (critical — P0 data-loss)
+
+- **Cascade-delete data loss**: foreign keys `subscriptions.plan_id`,
+  `licenses.plan_id`, `licenses.user_id`, and `subscription_items.plan_id`
+  were declared `ON DELETE CASCADE`. A single `DELETE FROM plans WHERE …`
+  (or user delete) physically wiped every dependent subscription, license,
+  and subscription_item — `softDeletes` model traits did NOT protect
+  against this because InnoDB / SQLite FK enforcement happens at the
+  database layer, below Eloquent.
+- New migration `2026_05_13_090000_fix_cascade_delete_protection.php`
+  drops and re-creates those four foreign keys as `RESTRICT`, and adds
+  `plans.deleted_at`. The migration is idempotent — safe to re-run.
+- `Plan` model gains the `SoftDeletes` trait. To remove a plan, soft-delete it
+  via `$plan->delete()`. `$plan->forceDelete()` now throws `QueryException`
+  unless every dependent subscription/license/subscription_item has been
+  reassigned or removed first.
+- `Subscription::plan()`, `License::plan()`, `SubscriptionItem::plan()`
+  belongsTo relations chain `->withTrashed()` so historical billing keeps
+  resolving its plan after archival. Without this, every renewal cycle on
+  a subscription whose plan was archived would silently break.
+
+### BREAKING (behaviour change)
+
+- `User::delete()` no longer cascades to `licenses`. Consuming apps that
+  relied on a hard `User::delete()` to silently clean up licenses now
+  receive `QueryException` from the `licenses.user_id` `RESTRICT` constraint.
+  This is intentional defense-in-depth: the previous behaviour destroyed
+  audit trails on user-delete and amplified the radius of any
+  admin-deletion mistake. Required app changes: cancel/archive the
+  licenses (`License::forceDelete()` per row, or a soft-delete workflow)
+  before calling `User::delete()`. `nullOnDelete` was considered as a
+  GDPR-friendlier alternative but rejected — the package has no built-in
+  orphan-license cleanup job and a NULL `user_id` silently breaks
+  `License::owner()` everywhere.
+
+### Upgrade notes
+
+- After `composer update`, run `php artisan migrate`. The migration is
+  idempotent and safe to re-run.
+- Audit your `User::delete()` paths for the new restrict behaviour.
+- If you maintain a plan-management UI, switch any hard `DELETE` calls
+  to `$plan->delete()` (now soft) or `$plan->forceDelete()` only after
+  validating no dependents remain.
+
+---
+
 ## v1.2.0 — 2026-05-13
 
 ### Post-v1.1.0 hardening
