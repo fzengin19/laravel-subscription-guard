@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Support\Json;
 
@@ -119,4 +120,12 @@ it('Task 3 — no production source file (outside the enum) contains the raw str
         $hasRawTrialing = str_contains($content, "'trialing'");
         expect($hasRawTrialing)->toBeFalse("Raw 'trialing' string still present in {$path}");
     }
+});
+
+// -----------------------------------------------------------------------------
+// Task 4: plans.trial_days migration
+// -----------------------------------------------------------------------------
+
+it('Task 4 — plans table has trial_days column', function (): void {
+    expect(Schema::hasColumn('plans', 'trial_days'))->toBeTrue();
 });
