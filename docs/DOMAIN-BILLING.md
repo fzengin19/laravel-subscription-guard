@@ -12,8 +12,39 @@ A plan with `trial_days > 0` causes `SubscriptionService::create()` to:
 
 When the trial ends, the transition is driven by:
 
-- **Self-managed providers** (`paytr`): the `subguard:process-trial-expiry` Artisan command (run on cron) dispatches `ProcessTrialExpiryJob` per subscription. The job moves `Trialing → PastDue` and sets `grace_ends_at` so the standard dunning flow takes over.
-- **Provider-managed providers** (`iyzico`): the package intentionally does **not** transition the subscription itself. Iyzico's subscription event drives the state change via the webhook intake pipeline.
+- **Self-managed providers** (`paytr`): the `subguard:process-trial-expiry` Artisan command (run on cron) dispatches `ProcessTrialExpiryJob` per subscription. The job fires `Events\TrialEnding` first (see hook below), then — if no listener intercepted — moves `Trialing → PastDue` and sets `grace_ends_at` so the standard dunning flow takes over.
+- **Provider-managed providers** (`iyzico`): the package intentionally does **not** transition the subscription itself, and does **not** fire `TrialEnding`. Iyzico's subscription event drives the state change via the webhook intake pipeline.
+
+### Application Hook: `TrialEnding`
+
+The consuming app decides what happens at trial end — the package only provides the hook. Listen for `TrialEnding` and dispatch whatever action fits your product:
+
+```php
+// app/Providers/EventServiceProvider.php
+protected $listen = [
+    \SubscriptionGuard\LaravelSubscriptionGuard\Events\TrialEnding::class => [
+        \App\Listeners\AutoChargeOnTrialEnd::class,
+    ],
+];
+
+// app/Listeners/AutoChargeOnTrialEnd.php
+public function handle(\SubscriptionGuard\LaravelSubscriptionGuard\Events\TrialEnding $event): void
+{
+    // Option A: auto-charge the saved payment method (classic SaaS).
+    // The package allows Trialing → Active when the charge succeeds.
+    \App\Jobs\AttemptTrialEndChargeJob::dispatch($event->subscription->getKey());
+
+    // Option B: email the user and let them confirm manually — no transition here.
+    // The job's default behaviour transitions Trialing → PastDue + grace.
+
+    // Option C: synchronously transition Trialing → Active (e.g. converting a free trial
+    // to a permanent free tier). The job's PastDue default is skipped.
+    // $event->subscription->transitionTo(\SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus::Active);
+    // $event->subscription->save();
+}
+```
+
+If no listener is registered, the package falls back to `Trialing → PastDue` + grace, preserving the current behaviour.
 
 Allowed trial state transitions are encoded in `SubscriptionStatus::allowedTransitions()`:
 

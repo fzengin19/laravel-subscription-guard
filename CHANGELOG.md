@@ -19,6 +19,13 @@
   `subguard:process-trial-expiry` Artisan command (uses `lazyById(500)`).
   Self-managed providers transition `trialing → past_due` on trial end;
   provider-managed (`iyzico`) defers to its own subscription event.
+- **Trial application hook**: new `Events\TrialEnding` event fired by
+  `ProcessTrialExpiryJob` (self-managed only) **before** the default
+  `Trialing → PastDue` transition. Consuming applications can listen and
+  decide the trial-end policy (auto-charge, email confirmation, extend,
+  convert to free tier, etc.). If a sync listener transitions the
+  subscription out of `Trialing`, the package's PastDue default is
+  skipped. See `docs/DOMAIN-BILLING.md` for examples.
 - **Idempotency hash safety**: new `Support\Json::safeHash()` helper using
   `JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE`, replacing
   `hash('sha256', (string) json_encode(\$x))` at three webhook eventId

@@ -5,9 +5,11 @@ declare(strict_types=1);
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Events\TrialEnding;
 use SubscriptionGuard\LaravelSubscriptionGuard\Jobs\ProcessTrialExpiryJob;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
@@ -268,6 +270,52 @@ it('Task 6 — ProcessTrialExpiryJob skips provider-managed subscriptions (iyzic
 
     $sub->refresh();
     expect($sub->getAttribute('status'))->toBe(SubscriptionStatus::Trialing->value);
+});
+
+it('Task 6 — ProcessTrialExpiryJob fires TrialEnding event for self-managed expired trials', function (): void {
+    Event::fake([TrialEnding::class]);
+
+    $sub = makeTrialingSubscriptionHardening('trial-event-fire@example.test', 'paytr', now()->subMinute());
+
+    (new ProcessTrialExpiryJob((int) $sub->getKey()))->handle(
+        app(PaymentManager::class),
+        app(SubscriptionService::class),
+    );
+
+    Event::assertDispatched(TrialEnding::class, function (TrialEnding $event) use ($sub) {
+        return $event->subscription->getKey() === $sub->getKey();
+    });
+});
+
+it('Task 6 — ProcessTrialExpiryJob does NOT fire TrialEnding for provider-managed (iyzico)', function (): void {
+    Event::fake([TrialEnding::class]);
+
+    $sub = makeTrialingSubscriptionHardening('trial-event-iyzico@example.test', 'iyzico', now()->subMinute());
+
+    (new ProcessTrialExpiryJob((int) $sub->getKey()))->handle(
+        app(PaymentManager::class),
+        app(SubscriptionService::class),
+    );
+
+    Event::assertNotDispatched(TrialEnding::class);
+});
+
+it('Task 6 — TrialEnding listener can transition subscription Trialing → Active, skipping default PastDue', function (): void {
+    $sub = makeTrialingSubscriptionHardening('trial-event-listener@example.test', 'paytr', now()->subMinute());
+
+    // App-level listener simulating "auto-charge succeeded" — moves to Active.
+    Event::listen(TrialEnding::class, function (TrialEnding $event): void {
+        $event->subscription->transitionTo(SubscriptionStatus::Active);
+        $event->subscription->save();
+    });
+
+    (new ProcessTrialExpiryJob((int) $sub->getKey()))->handle(
+        app(PaymentManager::class),
+        app(SubscriptionService::class),
+    );
+
+    $sub->refresh();
+    expect($sub->getAttribute('status'))->toBe(SubscriptionStatus::Active->value);
 });
 
 it('Task 6 — subguard:process-trial-expiry dispatches a job per expired trialing subscription', function (): void {

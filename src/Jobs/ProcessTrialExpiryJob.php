@@ -12,7 +12,9 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
+use SubscriptionGuard\LaravelSubscriptionGuard\Events\TrialEnding;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
 use SubscriptionGuard\LaravelSubscriptionGuard\Subscription\SubscriptionService;
@@ -61,6 +63,18 @@ final class ProcessTrialExpiryJob implements ShouldQueue
 
                 if ($provider !== '' && $paymentManager->managesOwnBilling($provider)) {
                     // Provider-managed billing drives the transition via subscription.order.* webhook.
+                    return;
+                }
+
+                // Application-level hook: consuming apps may listen and decide what
+                // happens at trial end (auto-charge, email, extend, etc). If a listener
+                // synchronously transitions the subscription out of Trialing, the
+                // default PastDue path is skipped.
+                Event::dispatch(new TrialEnding($subscription));
+
+                $subscription->refresh();
+
+                if ((string) $subscription->getAttribute('status') !== SubscriptionStatus::Trialing->value) {
                     return;
                 }
 
