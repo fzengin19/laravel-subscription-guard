@@ -142,3 +142,16 @@ it('Task 5 — DB refuses to hard-delete a plan that has subscription_items', fu
     expect(fn () => DB::table('plans')->where('id', $plan->id)->delete())
         ->toThrow(QueryException::class);
 });
+
+// -----------------------------------------------------------------------------
+// Task 6: Plan supports SoftDeletes
+// -----------------------------------------------------------------------------
+
+it('Task 6 — Plan supports soft delete and is excluded from default queries', function (): void {
+    $plan = makePlanCascade();
+    $plan->delete();
+
+    expect(Plan::query()->find($plan->id))->toBeNull();
+    expect(Plan::withTrashed()->find($plan->id))->not->toBeNull();
+    expect(Plan::withTrashed()->find($plan->id)->trashed())->toBeTrue();
+});
