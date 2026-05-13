@@ -155,3 +155,49 @@ it('Task 6 — Plan supports soft delete and is excluded from default queries', 
     expect(Plan::withTrashed()->find($plan->id))->not->toBeNull();
     expect(Plan::withTrashed()->find($plan->id)->trashed())->toBeTrue();
 });
+
+// -----------------------------------------------------------------------------
+// Task 7: Subscription/License/SubscriptionItem plan() resolves trashed plans
+// -----------------------------------------------------------------------------
+
+it('Task 7 — Subscription, License, SubscriptionItem resolve their soft-deleted plan via withTrashed', function (): void {
+    $userId = makeUserCascade('task7@example.test');
+    $plan = makePlanCascade();
+
+    $subscription = Subscription::query()->forceCreate([
+        'subscribable_type' => config('auth.providers.users.model'),
+        'subscribable_id' => $userId,
+        'plan_id' => $plan->id,
+        'provider' => 'iyzico',
+        'status' => 'active',
+        'billing_period' => 'monthly',
+        'billing_interval' => 1,
+        'amount' => 100,
+        'currency' => 'TRY',
+    ]);
+
+    $license = License::query()->forceCreate([
+        'user_id' => $userId,
+        'plan_id' => $plan->id,
+        'key' => 'lic-'.uniqid(),
+        'status' => 'active',
+        'max_activations' => 1,
+        'current_activations' => 0,
+    ]);
+
+    $item = SubscriptionItem::query()->forceCreate([
+        'subscription_id' => $subscription->id,
+        'plan_id' => $plan->id,
+        'quantity' => 1,
+        'unit_price' => 100,
+    ]);
+
+    $plan->delete();
+
+    expect($subscription->fresh()->plan)->not->toBeNull()
+        ->and($subscription->fresh()->plan->id)->toBe($plan->id);
+    expect($license->fresh()->plan)->not->toBeNull()
+        ->and($license->fresh()->plan->id)->toBe($plan->id);
+    expect($item->fresh()->plan)->not->toBeNull()
+        ->and($item->fresh()->plan->id)->toBe($plan->id);
+});
