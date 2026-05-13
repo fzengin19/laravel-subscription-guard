@@ -79,7 +79,7 @@ final class PaymentCallbackController
                                 'event_type' => $eventType,
                                 'idempotency_key' => $request->header('x-idempotency-key'),
                                 'payload' => $payload,
-                                'headers' => $request->headers->all(),
+                                'headers' => $this->filterHeaders($request),
                             ]);
 
                             return [
@@ -102,7 +102,7 @@ final class PaymentCallbackController
                         'event_id' => $eventId,
                         'idempotency_key' => $request->header('x-idempotency-key'),
                         'payload' => $payload,
-                        'headers' => $request->headers->all(),
+                        'headers' => $this->filterHeaders($request),
                         'status' => 'pending',
                     ]);
 
@@ -140,5 +140,26 @@ final class PaymentCallbackController
             'event_id' => $eventId,
             'duplicate' => (bool) ($result['duplicate'] ?? false),
         ], (bool) ($result['duplicate'] ?? false) ? 200 : 202);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function filterHeaders(Request $request): array
+    {
+        $sensitiveHeaders = [
+            'authorization',
+            'cookie',
+            'set-cookie',
+            'proxy-authorization',
+        ];
+
+        $headers = $request->headers->all();
+
+        foreach ($sensitiveHeaders as $header) {
+            unset($headers[$header]);
+        }
+
+        return $headers;
     }
 }

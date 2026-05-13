@@ -31,6 +31,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Data\WebhookResult;
 use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Exceptions\UnsupportedProviderOperationException;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Concerns\SanitizesProviderData;
+use SubscriptionGuard\LaravelSubscriptionGuard\Support\Json;
 use Throwable;
 
 final class IyzicoProvider implements PaymentProviderInterface
@@ -420,7 +421,7 @@ final class IyzicoProvider implements PaymentProviderInterface
     private function eventId(array $payload): string
     {
         return (string) ($this->extractString($payload, ['event_id', 'eventId', 'id', 'referenceCode'])
-            ?? hash('sha256', (string) json_encode($payload)));
+            ?? Json::safeHash($payload));
     }
 
     private function extractString(array $payload, array $paths): ?string

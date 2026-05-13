@@ -13,6 +13,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\ProviderMockModeGuard;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Data\PaytrPaymentRequest;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Data\PaytrPaymentResponse;
+use SubscriptionGuard\LaravelSubscriptionGuard\Support\Json;
 
 class PaytrProvider implements PaymentProviderInterface
 {
@@ -81,7 +82,7 @@ class PaytrProvider implements PaymentProviderInterface
     {
         if ($this->mockMode()) {
             $trialEndsAt = $details['trial_ends_at'] ?? null;
-            $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? 'trialing' : SubscriptionStatus::Active->value;
+            $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? SubscriptionStatus::Trialing->value : SubscriptionStatus::Active->value;
 
             return new SubscriptionResponse(
                 success: true,
@@ -98,7 +99,7 @@ class PaytrProvider implements PaymentProviderInterface
         }
 
         $trialEndsAt = $details['trial_ends_at'] ?? null;
-        $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? 'trialing' : SubscriptionStatus::Active->value;
+        $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? SubscriptionStatus::Trialing->value : SubscriptionStatus::Active->value;
 
         return new SubscriptionResponse(
             success: true,
@@ -192,7 +193,7 @@ class PaytrProvider implements PaymentProviderInterface
     {
         $eventId = $this->string($payload, 'merchant_oid')
             ?? $this->string($payload, 'event_id')
-            ?? hash('sha256', (string) json_encode($payload));
+            ?? Json::safeHash($payload);
 
         $subscriptionId = $this->string($payload, 'subscription_id')
             ?? $this->string($payload, 'provider_subscription_id')

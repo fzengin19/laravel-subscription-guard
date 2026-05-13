@@ -11,6 +11,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\DB;
+use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Subscription;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Transaction;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\PaymentManager;
@@ -70,7 +71,7 @@ final class ProcessRenewalCandidateJob implements ShouldQueue
 
                 $status = (string) $subscription->getAttribute('status');
 
-                if (! in_array($status, ['active', 'trialing'], true)) {
+                if (! in_array($status, [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value], true)) {
                     return;
                 }
 

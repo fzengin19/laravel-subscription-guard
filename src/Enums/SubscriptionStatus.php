@@ -7,6 +7,7 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Enums;
 enum SubscriptionStatus: string
 {
     case Pending = 'pending';
+    case Trialing = 'trialing';
     case Active = 'active';
     case Cancelled = 'cancelled';
     case PastDue = 'past_due';
@@ -22,6 +23,7 @@ enum SubscriptionStatus: string
 
         return match (strtolower(trim((string) $status))) {
             'pending' => self::Pending,
+            'trialing', 'trial' => self::Trialing,
             'active', 'upgraded' => self::Active,
             'past_due', 'unpaid' => self::PastDue,
             'failed' => self::Failed,
@@ -38,7 +40,8 @@ enum SubscriptionStatus: string
     public function allowedTransitions(): array
     {
         return match ($this) {
-            self::Pending => [self::Active, self::Failed, self::Cancelled],
+            self::Pending => [self::Trialing, self::Active, self::Failed, self::Cancelled],
+            self::Trialing => [self::Active, self::PastDue, self::Cancelled, self::Failed],
             self::Active => [self::Cancelled, self::Paused, self::PastDue, self::Suspended],
             self::PastDue => [self::Active, self::Suspended, self::Cancelled],
             self::Paused => [self::Active, self::Cancelled],

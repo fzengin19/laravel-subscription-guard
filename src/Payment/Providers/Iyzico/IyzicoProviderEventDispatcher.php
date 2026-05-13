@@ -7,6 +7,7 @@ namespace SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico;
 use Illuminate\Support\Facades\Event;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\ProviderEventDispatcherInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\Events\IyzicoPaymentCompleted;
+use SubscriptionGuard\LaravelSubscriptionGuard\Support\Json;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\Events\IyzicoPaymentFailed;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\Events\IyzicoSubscriptionCancelled;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\Events\IyzicoSubscriptionCreated;
@@ -19,7 +20,7 @@ final class IyzicoProviderEventDispatcher implements ProviderEventDispatcherInte
     {
         $subscriptionId = $this->string($context, 'subscription_id');
         $transactionId = $this->string($context, 'transaction_id');
-        $eventId = $this->string($context, 'event_id') ?? hash('sha256', (string) json_encode($context));
+        $eventId = $this->string($context, 'event_id') ?? Json::safeHash($context);
         $amount = (float) ($context['amount'] ?? 0);
         $metadata = is_array($context['metadata'] ?? null) ? $context['metadata'] : [];
         $reason = $this->string($context, 'reason');

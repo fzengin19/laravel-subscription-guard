@@ -2,6 +2,36 @@
 
 Use this document to understand the package's security posture, built-in protections, and operational security considerations.
 
+## Production Hardening (v1.1.0 + v1.2.0)
+
+### Mock-Mode Fail-Closed
+
+`ProviderMockModeGuard::ensureNotProduction()` is invoked by `IyzicoSupport::mockMode()` and `PaytrProvider::mockMode()`. When `app()->environment('production')` and the corresponding `*_MOCK` env flag is true, the guard throws `ProviderException`. There is no critical-log-only bypass path remaining.
+
+### Terminal-State Guard
+
+`SubscriptionService::applySubscriptionStatus()` is the single entry point for every status write in the billing pipeline. It refuses any non-`Cancelled` target on a subscription whose current status is `Cancelled` and logs the rejected attempt to the `subguard_payments` channel. Wraps:
+
+- `recordWebhookTransaction` (late webhook events)
+- `handlePaymentResult` (3DS / checkout callbacks)
+- `PaymentChargeJob::handle` (in-flight charge job)
+- `ProcessDunningRetryJob::handleDunningExhaustion`
+
+### Idempotency-Hash Safety
+
+`Support\Json::safeHash()` (v1.2.0) is used at every webhook `eventId` fallback site (`IyzicoProvider::eventId`, `PaytrProvider::processWebhook`, `IyzicoProviderEventDispatcher::dispatch`). It uses `JSON_THROW_ON_ERROR | JSON_INVALID_UTF8_SUBSTITUTE`, falls back to `serialize()` on `JsonException`, and never returns `hash('sha256', '')` for non-UTF8 or unencodable input. Replaces the prior `(string) json_encode($x)` pattern that collapsed to the empty-string hash for binary or invalid-UTF8 payloads.
+
+### Sensitive Header Filtering
+
+Both `WebhookController::filterHeaders()` and (v1.2.0) `PaymentCallbackController::filterHeaders()` strip `authorization`, `cookie`, `set-cookie`, and `proxy-authorization` from the headers persisted to `webhook_calls.headers`. Webhook bodies are still stored in full for audit; only sensitive transport headers are removed.
+
+### Cancel Race Defense
+
+`SubscriptionService::cancel()` re-reads the subscription on both branches of the cache-lock outcome:
+
+- On `Cache::lock(...)->get()` returning `false` (contention), the loser refreshes its model — if the winner's commit landed, the loser returns `true` idempotently instead of `false`.
+- After acquiring the lock, the holder refreshes again before the remote provider call to avoid sending a cancel for an already-cancelled remote subscription.
+
 ## Security Model
 
 The package handles payment data, webhook intake from external providers, license signing, and subscription state mutations. Security is applied at multiple layers:
@@ -12,6 +42,7 @@ The package handles payment data, webhook intake from external providers, licens
 4. **Concurrency protection** — cache locks and database locks
 5. **Access control** — rate limiting, payload size limits, SSRF protection
 6. **Cryptographic integrity** — Ed25519 license signing and verification
+7. **Production fail-closed** — mock-mode guard, terminal-state guard, idempotency-hash safety (v1.1.0–v1.2.0)
 
 ## Webhook Security
 
