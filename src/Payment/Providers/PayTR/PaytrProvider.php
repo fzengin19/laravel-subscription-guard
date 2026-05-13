@@ -13,6 +13,7 @@ use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\ProviderMockModeGuard;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Data\PaytrPaymentRequest;
 use SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\Data\PaytrPaymentResponse;
+use SubscriptionGuard\LaravelSubscriptionGuard\Support\Json;
 
 class PaytrProvider implements PaymentProviderInterface
 {
@@ -192,7 +193,7 @@ class PaytrProvider implements PaymentProviderInterface
     {
         $eventId = $this->string($payload, 'merchant_oid')
             ?? $this->string($payload, 'event_id')
-            ?? hash('sha256', (string) json_encode($payload));
+            ?? Json::safeHash($payload);
 
         $subscriptionId = $this->string($payload, 'subscription_id')
             ?? $this->string($payload, 'provider_subscription_id')

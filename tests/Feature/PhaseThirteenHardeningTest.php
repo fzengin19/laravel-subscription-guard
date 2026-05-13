@@ -282,3 +282,31 @@ it('Task 6 — subguard:process-trial-expiry dispatches a job per expired triali
     expect($exitCode)->toBe(0);
     Queue::assertPushed(ProcessTrialExpiryJob::class, 2);
 });
+
+// -----------------------------------------------------------------------------
+// Task 7-narrow: Json::safeHash at webhook eventId fallback sites
+// -----------------------------------------------------------------------------
+
+it('Task 7 — IyzicoProvider::processWebhook eventId is stable, non-empty for binary payload', function (): void {
+    $provider = app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\Iyzico\IyzicoProvider::class);
+    $emptyHash = hash('sha256', '');
+
+    $a = $provider->processWebhook(['data' => "\xC3\x28"]);
+    $b = $provider->processWebhook(['data' => "\xA0\xA1"]);
+
+    expect($a->eventId)->not->toBe($emptyHash);
+    expect($b->eventId)->not->toBe($emptyHash);
+    expect($a->eventId)->not->toBe($b->eventId);
+});
+
+it('Task 7 — PaytrProvider::processWebhook eventId is stable, non-empty for binary payload (no merchant_oid/event_id)', function (): void {
+    $provider = app(\SubscriptionGuard\LaravelSubscriptionGuard\Payment\Providers\PayTR\PaytrProvider::class);
+    $emptyHash = hash('sha256', '');
+
+    $a = $provider->processWebhook(['status' => 'failed', 'data' => "\xC3\x28"]);
+    $b = $provider->processWebhook(['status' => 'failed', 'data' => "\xA0\xA1"]);
+
+    expect($a->eventId)->not->toBe($emptyHash);
+    expect($b->eventId)->not->toBe($emptyHash);
+    expect($a->eventId)->not->toBe($b->eventId);
+});
