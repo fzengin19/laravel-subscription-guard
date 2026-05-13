@@ -23,19 +23,24 @@
   resolving its plan after archival. Without this, every renewal cycle on
   a subscription whose plan was archived would silently break.
 
-### BREAKING (behaviour change)
+### Required behaviour change
 
-- `User::delete()` no longer cascades to `licenses`. Consuming apps that
-  relied on a hard `User::delete()` to silently clean up licenses now
-  receive `QueryException` from the `licenses.user_id` `RESTRICT` constraint.
-  This is intentional defense-in-depth: the previous behaviour destroyed
-  audit trails on user-delete and amplified the radius of any
+- `User::delete()` no longer cascade-removes the user's licenses. Consuming
+  apps that relied on a hard `User::delete()` to silently clean up licenses
+  now receive `QueryException` from the `licenses.user_id` `RESTRICT`
+  constraint. This is intentional defense-in-depth: the previous behaviour
+  destroyed audit trails on user-delete and amplified the radius of any
   admin-deletion mistake. Required app changes: cancel/archive the
   licenses (`License::forceDelete()` per row, or a soft-delete workflow)
   before calling `User::delete()`. `nullOnDelete` was considered as a
   GDPR-friendlier alternative but rejected — the package has no built-in
   orphan-license cleanup job and a NULL `user_id` silently breaks
   `License::owner()` everywhere.
+
+  Released under v1.3.0 (minor) rather than v2.0.0 because the package is
+  young, the user base is small, and the change closes a P0 data-loss
+  vulnerability. Strict SemVer would call this a major bump; we accept
+  the trade-off.
 
 ### Upgrade notes
 
