@@ -81,7 +81,7 @@ class PaytrProvider implements PaymentProviderInterface
     {
         if ($this->mockMode()) {
             $trialEndsAt = $details['trial_ends_at'] ?? null;
-            $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? 'trialing' : SubscriptionStatus::Active->value;
+            $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? SubscriptionStatus::Trialing->value : SubscriptionStatus::Active->value;
 
             return new SubscriptionResponse(
                 success: true,
@@ -98,7 +98,7 @@ class PaytrProvider implements PaymentProviderInterface
         }
 
         $trialEndsAt = $details['trial_ends_at'] ?? null;
-        $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? 'trialing' : SubscriptionStatus::Active->value;
+        $status = is_string($trialEndsAt) && $trialEndsAt !== '' ? SubscriptionStatus::Trialing->value : SubscriptionStatus::Active->value;
 
         return new SubscriptionResponse(
             success: true,

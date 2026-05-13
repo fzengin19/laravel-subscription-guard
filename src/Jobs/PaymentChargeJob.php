@@ -142,7 +142,7 @@ final class PaymentChargeJob implements ShouldQueue
                     true,
                 );
 
-                if (in_array((string) $subscription->getAttribute('status'), [SubscriptionStatus::Active->value, 'trialing'], true)) {
+                if (in_array((string) $subscription->getAttribute('status'), [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value], true)) {
                     if ($subscriptionService->applySubscriptionStatus($subscription, SubscriptionStatus::PastDue, 'charge_job.failure')) {
                         if ($subscription->getAttribute('grace_ends_at') === null) {
                             $subscription->setAttribute('grace_ends_at', now()->addDays((int) config('subscription-guard.billing.grace_period_days', 7)));

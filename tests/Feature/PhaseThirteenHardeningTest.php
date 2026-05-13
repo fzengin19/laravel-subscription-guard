@@ -100,3 +100,23 @@ it('Task 2 — Active cannot transition to Trialing (no admin-extension path)', 
     // Per rev2 plan: Active → Trialing was dropped as speculative.
     expect(SubscriptionStatus::Active->canTransitionTo(SubscriptionStatus::Trialing))->toBeFalse();
 });
+
+// -----------------------------------------------------------------------------
+// Task 3: no raw 'trialing' string outside the enum itself
+// -----------------------------------------------------------------------------
+
+it('Task 3 — no production source file (outside the enum) contains the raw string "trialing"', function (): void {
+    $paths = [
+        __DIR__.'/../../src/Subscription/SubscriptionService.php',
+        __DIR__.'/../../src/Payment/Providers/PayTR/PaytrProvider.php',
+        __DIR__.'/../../src/Jobs/PaymentChargeJob.php',
+        __DIR__.'/../../src/Jobs/ProcessRenewalCandidateJob.php',
+        __DIR__.'/../../src/Licensing/LicenseManager.php',
+    ];
+
+    foreach ($paths as $path) {
+        $content = (string) file_get_contents($path);
+        $hasRawTrialing = str_contains($content, "'trialing'");
+        expect($hasRawTrialing)->toBeFalse("Raw 'trialing' string still present in {$path}");
+    }
+});

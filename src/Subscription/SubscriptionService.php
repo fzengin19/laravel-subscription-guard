@@ -59,7 +59,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
                     SubscriptionStatus::Active->value,
                     SubscriptionStatus::Pending->value,
                     SubscriptionStatus::PastDue->value,
-                    'trialing',
+                    SubscriptionStatus::Trialing->value,
                 ])
                 ->lockForUpdate()
                 ->first();
@@ -291,7 +291,7 @@ final class SubscriptionService implements SubscriptionServiceInterface
 
         $subscriptions = Subscription::query()
             ->where('next_billing_date', '<=', $formattedDate)
-            ->whereIn('status', [SubscriptionStatus::Active->value, 'trialing'])
+            ->whereIn('status', [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value])
             ->get();
 
         foreach ($subscriptions as $subscription) {

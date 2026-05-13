@@ -9,6 +9,7 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use SubscriptionGuard\LaravelSubscriptionGuard\Contracts\LicenseManagerInterface;
 use SubscriptionGuard\LaravelSubscriptionGuard\Data\ValidationResult;
+use SubscriptionGuard\LaravelSubscriptionGuard\Enums\SubscriptionStatus;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\License;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\LicenseActivation;
 use SubscriptionGuard\LaravelSubscriptionGuard\Models\Plan;
@@ -117,7 +118,7 @@ final class LicenseManager implements LicenseManagerInterface
                 return false;
             }
 
-            if (! in_array((string) $license->getAttribute('status'), ['active', 'trialing'], true)) {
+            if (! in_array((string) $license->getAttribute('status'), [SubscriptionStatus::Active->value, SubscriptionStatus::Trialing->value], true)) {
                 return false;
             }
 
