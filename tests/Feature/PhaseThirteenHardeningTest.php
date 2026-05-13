@@ -402,6 +402,42 @@ it('Task 12 — cancel returns true when DB became cancelled between find and lo
     $externalLock->release();
 });
 
+// -----------------------------------------------------------------------------
+// Task B: PaymentCallbackController must strip sensitive headers before persisting
+// -----------------------------------------------------------------------------
+
+it('Task B — PaymentCallbackController strips authorization and cookie headers before storing WebhookCall', function (): void {
+    config()->set('subscription-guard.providers.drivers.iyzico.mock', true);
+
+    $response = $this->postJson(
+        '/subguard/webhooks/iyzico/3ds/callback',
+        [
+            'event_type' => 'subscription.created',
+            'event_id' => 'evt_callback_filter_'.bin2hex(random_bytes(4)),
+            'paymentId' => 'pay_123',
+            'status' => 'success',
+        ],
+        [
+            'Authorization' => 'Bearer secret-token-should-not-persist',
+            'Cookie' => 'session=do-not-persist',
+            'X-Iyz-Signature-V3' => 'mock-signature',
+        ]
+    );
+
+    expect($response->status())->toBeIn([200, 202]);
+
+    $call = \SubscriptionGuard\LaravelSubscriptionGuard\Models\WebhookCall::query()
+        ->where('provider', 'iyzico')
+        ->latest('id')
+        ->first();
+
+    expect($call)->not->toBeNull();
+    $headers = $call->getAttribute('headers');
+    expect($headers)->toBeArray();
+    expect(array_keys(array_change_key_case($headers, CASE_LOWER)))->not->toContain('authorization');
+    expect(array_keys(array_change_key_case($headers, CASE_LOWER)))->not->toContain('cookie');
+});
+
 it('Task 9 — processRenewals still dispatches one job per candidate across many subscriptions', function (): void {
     Queue::fake();
 
